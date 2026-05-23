@@ -1,0 +1,7 @@
+interface:
+  display_name: "Oracle Cloud BOM Builder"
+  short_description: "Build OCI BOM and pricing workbooks"
+  default_prompt: "Use $oracle-cloud-bom-builder to create an Oracle Cloud BOM Excel workbook from these Oracle pricing estimator line items."
+
+policy:
+  allow_implicit_invocation: true
