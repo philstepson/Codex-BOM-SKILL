@@ -38,6 +38,9 @@ For Exadata Database Service, also ask:
 - Infrastructure generation or model if known.
 - Number of database servers.
 - Number of storage servers.
+- Database server model/SKU when known, especially for Exadata Cloud@Customer.
+- Storage server model/SKU when known, especially for Exadata Cloud@Customer.
+- Rack configuration, expansion rack details, or other Cloud@Customer infrastructure components when applicable.
 - ECPU quantity.
 - Dedicated infrastructure or Cloud@Customer.
 
@@ -135,3 +138,5 @@ When the user cannot answer a required pricing parameter:
 - Preserve formulas where possible so values calculate after the missing inputs are entered.
 
 Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data or current Oracle pricing sources only when explicitly requested and verified.
+
+For Exadata Cloud@Customer and other resources that Oracle Cost Estimator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. Extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not store the source PDF or extracted pricing table in the skill repository.

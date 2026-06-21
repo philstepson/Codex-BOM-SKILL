@@ -48,6 +48,14 @@ Recommended behavior:
 - `Discounted Annual Cost` should equal discounted monthly cost multiplied by `12`.
 - Total rows should sum list monthly cost, discounted monthly cost, and discounted annual cost.
 
+## Supplemental Pricing From Current PDF Sources
+
+Use Oracle Cost Estimator pricing as the primary source. When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback.
+
+Do not add persistent source-tracking columns for the supplemental PDF by default. Instead, keep the Oracle estimator columns unchanged and append a concise footnote to `Custom Note` for any row filled from the PDF. The note must identify Oracle eSource PDF pricing and include the document date from the PDF front page.
+
+The supplemental PDF or extracted pricing table should not be committed into the skill repository. Use a temporary CSV during the build when script input is needed.
+
 ## Default Sheet Design
 
 Prefer one of these layouts:

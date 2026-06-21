@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import html
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -34,6 +35,19 @@ class BomRow:
     monthly_cost: str | int | float = ""
     custom_label: str = ""
     custom_note: str = ""
+
+
+@dataclass(frozen=True)
+class SupplementalPrice:
+    part: str = ""
+    description: str = ""
+    part_qty: str | int | float = ""
+    instance_qty: str | int | float = ""
+    usage_qty: str | int | float = ""
+    unit_price: str | int | float = ""
+    monthly_cost: str | int | float = ""
+    source_date: str = ""
+    source_note: str = ""
 
 
 SAMPLE_ROWS = [
@@ -66,6 +80,10 @@ SAMPLE_ROWS = [
         5999.616,
     ),
 ]
+
+
+def normalize_key(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
 
 
 def column_name(index: int) -> str:
@@ -129,6 +147,95 @@ def load_rows(csv_path: Path | None) -> list[BomRow]:
                 )
             )
     return rows
+
+
+def load_supplemental_prices(csv_path: Path | None) -> list[SupplementalPrice]:
+    if not csv_path:
+        return []
+
+    prices: list[SupplementalPrice] = []
+    with csv_path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        for item in reader:
+            prices.append(
+                SupplementalPrice(
+                    item.get("Part", ""),
+                    item.get("Description", ""),
+                    item.get("Part Qty", ""),
+                    item.get("Instance Qty", ""),
+                    item.get("Usage Qty", ""),
+                    item.get("Unit Price", ""),
+                    item.get("Monthly Cost", ""),
+                    item.get("Source Document Date", "") or item.get("Document Date", ""),
+                    item.get("Source Note", ""),
+                )
+            )
+    return prices
+
+
+def find_supplemental_price(row: BomRow, prices: list[SupplementalPrice]) -> SupplementalPrice | None:
+    if row.part:
+        row_part = normalize_key(row.part)
+        for price in prices:
+            if normalize_key(price.part) == row_part:
+                return price
+
+    row_desc = normalize_key(row.description)
+    if not row_desc:
+        return None
+
+    for price in prices:
+        price_desc = normalize_key(price.description)
+        if price_desc and price_desc == row_desc:
+            return price
+
+    for price in prices:
+        price_desc = normalize_key(price.description)
+        if price_desc and (price_desc in row_desc or row_desc in price_desc):
+            return price
+
+    return None
+
+
+def with_supplemental_pricing(
+    rows: list[BomRow],
+    prices: list[SupplementalPrice],
+    default_source_date: str = "",
+) -> list[BomRow]:
+    if not prices:
+        return rows
+
+    enriched: list[BomRow] = []
+    for row in rows:
+        has_calculator_price = any(row_value != "" for row_value in [row.unit_price, row.monthly_cost])
+        price = find_supplemental_price(row, prices) if not has_calculator_price else None
+        if price is None:
+            enriched.append(row)
+            continue
+
+        source_date = price.source_date or default_source_date
+        footnote_parts = ["Pricing sourced from Oracle eSource PDF"]
+        if source_date:
+            footnote_parts.append(f"document date {source_date}")
+        if price.source_note:
+            footnote_parts.append(price.source_note)
+        source_footnote = "; ".join(footnote_parts) + "."
+        custom_note = f"{row.custom_note} {source_footnote}".strip()
+
+        enriched.append(
+            BomRow(
+                part=row.part or price.part,
+                description=row.description or price.description,
+                part_qty=row.part_qty or price.part_qty,
+                instance_qty=row.instance_qty or price.instance_qty,
+                usage_qty=row.usage_qty or price.usage_qty,
+                unit_price=price.unit_price,
+                monthly_cost=price.monthly_cost,
+                custom_label=row.custom_label,
+                custom_note=custom_note,
+            )
+        )
+    return enriched
 
 
 def build_sheet(rows: list[BomRow], discount: float, reference_label: str, currency: str, realm: str, service_type: str) -> str:
@@ -244,9 +351,21 @@ def main() -> None:
     parser.add_argument("--currency", default="USD")
     parser.add_argument("--realm", default="PUBLIC")
     parser.add_argument("--service-type", default="PAAS")
+    parser.add_argument(
+        "--supplemental-pricing-csv",
+        type=Path,
+        help="Optional runtime CSV extracted from the current authenticated Oracle eSource pricing PDF.",
+    )
+    parser.add_argument(
+        "--supplemental-source-date",
+        default="",
+        help="Document date from the front page of the supplemental Oracle eSource pricing PDF.",
+    )
     args = parser.parse_args()
 
     rows = load_rows(args.input_csv)
+    supplemental_prices = load_supplemental_prices(args.supplemental_pricing_csv)
+    rows = with_supplemental_pricing(rows, supplemental_prices, args.supplemental_source_date)
     sheet_xml = build_sheet(rows, args.discount, args.reference_label, args.currency, args.realm, args.service_type)
     write_workbook(args.template, args.output, sheet_xml)
     print(args.output)

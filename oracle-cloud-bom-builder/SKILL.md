@@ -15,13 +15,15 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
    - Part quantity, instance quantity, usage quantity, unit price, and monthly cost.
    - Service type, usually `PAAS`, unless the user provides another Oracle service category.
    - Any named OCI services, custom labels, notes, architecture assumptions, and region/currency details.
+   - Supplemental pricing source details when calculator data is incomplete, especially the current Oracle eSource PDF URL and the document date shown on the PDF front page.
 2. If the architecture is described but estimator inputs are missing, read `references/requirements-gathering.md` and ask the smallest useful set of sizing questions for the named services.
 3. Create a new `.xlsx` workbook using the Oracle Cost Estimator format as the base layout.
 4. Keep the original Oracle list-price fields intact and editable.
 5. Add a single editable discount percentage input that applies to all final list-price values.
 6. Add formula-driven discounted totals; do not hardcode values that should update when the discount changes.
 7. Preserve source assumptions and add clear notes that prices are estimates unless the user provides formal quote data.
-8. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
+8. For resources not fully covered by Oracle Cost Estimator, use the current authenticated supplemental source only at runtime and do not persist a copy of the source PDF in the skill or repository.
+9. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
 
 ## Workbook Format
 
@@ -47,6 +49,8 @@ Prioritize Oracle Platform Services. Also include any OCI service the user names
 
 If the user provides a service name without SKU details, include it as a line item with blank editable SKU/pricing fields and add a note that pricing requires Oracle Cost Estimator or formal quote input.
 
+For Exadata Cloud@Customer, explicitly gather model-level resource details because Oracle Cost Estimator may only expose ECPU-oriented pricing. Ask for database server model/count, storage server model/count, rack configuration, and any other Cloud@Customer infrastructure components the user expects in the BOM.
+
 ## Requirements Gathering
 
 Use `references/requirements-gathering.md` when the user is designing a cloud architecture, system configuration, or migration target and has not provided complete Oracle Cost Estimator rows.
@@ -59,6 +63,11 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 
 - Treat Oracle Cost Estimator values as list-price estimates.
 - Preserve `Unit Price` and `Monthly Cost` as list-price fields.
+- Prefer Oracle Cost Estimator pricing when it provides a complete price for a row.
+- If Oracle Cost Estimator does not provide the needed SKU or price for a row, use the current Oracle eSource PDF supplied by the user as a supplemental fallback source.
+- The current supplemental PDF URL is `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`; open it through browser authentication when needed rather than persisting a copy in the repo.
+- Extract only the rows needed for the BOM from the authenticated PDF into a temporary runtime CSV, then pass that CSV to `scripts/build_bom_template.py` with `--supplemental-pricing-csv`.
+- Capture the document date from the PDF front page and pass it with `--supplemental-source-date`; when supplemental PDF pricing is used, add a footnote in `Custom Note` identifying Oracle eSource PDF pricing and that document date.
 - Discount input should be a percentage, for example `15%`.
 - Discounted monthly cost formula: `Monthly Cost * (1 - Discount %)`.
 - Discounted annual cost formula: `Discounted Monthly Cost * 12`.
@@ -92,6 +101,23 @@ python3 scripts/build_bom_template.py --discount 0.15 --output outputs/sample-or
 Optional CSV input must use these headers:
 
 `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Custom Note`
+
+Optional supplemental pricing CSV input is intended for temporary rows extracted from the current authenticated Oracle eSource PDF. Supported headers are:
+
+`Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Source Document Date`, `Source Note`
+
+Supplemental pricing is used only when the primary input row has neither `Unit Price` nor `Monthly Cost`. Matching prefers exact `Part`, then exact normalized `Description`, then containment-based normalized `Description`.
+
+Example with supplemental PDF pricing:
+
+```bash
+python3 scripts/build_bom_template.py \
+  --input-csv /tmp/estimator.csv \
+  --supplemental-pricing-csv /tmp/esource-exadata-customer-pricing.csv \
+  --supplemental-source-date "MM/DD/YYYY" \
+  --discount 0.15 \
+  --output outputs/sample-oracle-cloud-bom.xlsx
+```
 
 `scripts/validate_bom_workbook.py` checks the generated workbook for the expected Oracle estimator headers, discount input, discount formulas, totals, and disclaimer.
 
