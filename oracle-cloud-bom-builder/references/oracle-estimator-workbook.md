@@ -56,6 +56,18 @@ Do not add persistent source-tracking columns for the supplemental PDF by defaul
 
 The supplemental PDF or extracted pricing table should not be committed into the skill repository. Use a temporary CSV during the build when script input is needed.
 
+## Exadata Cloud@Customer X11M Sample Baseline
+
+The bundled sample BOM should model an Exadata Database Service on Cloud@Customer X11M single-rack baseline unless the user supplies another configuration:
+
+- 1 rack.
+- 2 database servers, because each rack should be modeled as prepopulated with 2 database servers.
+- 3 storage servers, because that is the minimum for High redundancy.
+- High redundancy by default unless Normal redundancy is explicitly specified.
+- License model marked as TBD when the user has not chosen License Included or Bring Your Own License.
+
+Leave SKU and price fields blank when current pricing has not been supplied or extracted from an approved source. The sample should preserve editable Oracle estimator fields and use `Custom Note` to make the rack, redundancy, and licensing assumptions visible.
+
 ## Default Sheet Design
 
 Prefer one of these layouts:

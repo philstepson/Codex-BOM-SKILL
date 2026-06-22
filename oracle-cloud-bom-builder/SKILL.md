@@ -51,6 +51,8 @@ If the user provides a service name without SKU details, include it as a line it
 
 For Exadata Cloud@Customer, explicitly gather model-level resource details because Oracle Cost Estimator may only expose ECPU-oriented pricing. Ask for database server model/count, storage server model/count, rack configuration, and any other Cloud@Customer infrastructure components the user expects in the BOM.
 
+When the requested BOM includes Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cloud-at-customer-x11m.md` before asking questions or preparing rows. Use it to validate allowable database server types, storage server types, server counts, VM/cluster limits, rack limits, storage capacity assumptions, and networking/facility assumptions.
+
 ## Requirements Gathering
 
 Use `references/requirements-gathering.md` when the user is designing a cloud architecture, system configuration, or migration target and has not provided complete Oracle Cost Estimator rows.

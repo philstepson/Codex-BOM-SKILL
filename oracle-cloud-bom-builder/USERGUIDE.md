@@ -40,18 +40,26 @@ For Exadata Cloud@Customer, provide as much model-level detail as possible becau
 Useful details include:
 
 - Exadata generation, such as `X11M`.
-- Rack size, such as eighth, quarter, half, full, or elastic/medium rack.
-- Database server model and count.
-- Storage server model and count.
-- Rack, expansion rack, or other infrastructure components.
+- Base System or elastic configuration.
+- Single-rack or multi-rack design.
+- Database server type: Base, Standard, Large, or Extra Large.
+- Storage server type: Base, High Capacity, or Extreme Flash.
+- Database server count and storage server count.
+- Expansion rack count and expansion rack server counts, when applicable.
+- Storage redundancy, defaulting to High unless Normal is explicitly specified.
+- License model: License Included or Bring Your Own License.
 - ECPU quantity.
 - Hours per month, usually `744` for always-on resources.
 - Default memory and storage assumptions, if applicable.
 
+For Exadata Database Service on Cloud@Customer X11M, the default test baseline is a single rack with 2 database servers and 3 storage servers. Model each rack as prepopulated with 2 database servers. Additional database servers increase usable memory and database cores/ECPUs.
+
+High redundancy is the default storage assumption. It keeps two mirrored copies of the original data and can survive two HDA failures. Normal redundancy provides more usable storage because it keeps one mirrored copy, but it only survives one HDA failure.
+
 Example request:
 
 ```text
-Create a BOM for an Exadata Cloud@Customer X11M quarter rack with default memory and storage and 40 ECPUs. Name it Test-BOM.
+Create a BOM for an Exadata Cloud@Customer X11M single-rack baseline with 3 High Capacity storage servers, High redundancy, and License Included software. Name it Test-BOM.
 ```
 
 ## Pricing Source Order
@@ -153,7 +161,9 @@ The skill may ask:
 
 - Do you have Oracle Cost Estimator export rows?
 - What discount percentage should apply?
-- What rack size, generation, and server counts should be used?
+- What Exadata generation, rack count, and server counts should be used?
+- Should the software license model be License Included or BYOL?
+- Should storage use the default High redundancy assumption or Normal redundancy?
 - Should blank rows be left editable when pricing is unavailable?
 - What is the document date on the supplemental PDF front page?
 

@@ -44,6 +44,21 @@ For Exadata Database Service, also ask:
 - ECPU quantity.
 - Dedicated infrastructure or Cloud@Customer.
 
+For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cloud-at-customer-x11m.md` and gather:
+
+- Base System or elastic configuration.
+- Database server type: Base, Standard, Large, or Extra Large.
+- Storage server type: Base, High Capacity, or Extreme Flash.
+- Database server count and storage server count.
+- Whether the design is single-rack or multi-rack.
+- Storage redundancy: High redundancy or Normal redundancy. Default to High when unspecified.
+- Number of expansion racks and expansion-rack server counts, when multi-rack is in scope.
+- VM cluster count and VMs per database server, when VM layout is in scope.
+- Required local storage per VM and Oracle homes file-system size assumptions.
+- Whether local backups are required, because maximum database size differs with and without local backups.
+- License model: License Included or Bring Your Own License.
+- Network option for database servers and control plane servers, if the BOM covers rack or facilities inputs.
+
 For Autonomous Database, also ask:
 
 - Autonomous Transaction Processing, Autonomous Data Warehouse, JSON Database, or other.
