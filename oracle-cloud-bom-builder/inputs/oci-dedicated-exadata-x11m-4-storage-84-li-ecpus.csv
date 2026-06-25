@@ -1,0 +1,5 @@
+Part,Description,Part Qty,Instance Qty,Usage Qty,Unit Price,Monthly Cost,Custom Label,Custom Note
+,OCI Exadata Dedicated Infrastructure X11M,,,,,,,"BOM baseline: OCI Exadata Dedicated Infrastructure; assumes latest X11M; License Included; 84 database ECPUs; default 2 database servers; 4 total storage servers, meaning one additional storage server above the default 3. Pricing sourced from authenticated Oracle eSource PDF, document date June 11, 2026."
+B110627,Exadata Cloud Infrastructure - Database Server - X11M,2,1,744,2.9032,,,"Assumes default 2 dedicated Exadata database servers. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."
+B110629,Exadata Cloud Infrastructure - Storage Server - X11M,4,1,744,2.9032,,,"Assumes 4 total dedicated Exadata storage servers, including one extra storage server above the default 3. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."
+B110631,Exadata Database ECPU - Dedicated Infrastructure,84,1,744,0.3360,,"License Included","License Included ECPU pricing. 84 ECPUs running 744 hours/month. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."

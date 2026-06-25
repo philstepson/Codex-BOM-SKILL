@@ -82,12 +82,14 @@ Create a BOM for an Exadata Cloud@Customer X11M single-rack baseline with 3 High
 
 The skill uses this pricing order:
 
-1. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session.
+1. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session. This is the default path for almost every BOM that is not Exadata Cloud@Customer.
 2. User-provided estimator-style rows from an approved source.
-3. Supplemental pricing extracted at runtime from the current authenticated Oracle eSource PDF, only when calculator pricing is missing or when the request is Exadata Cloud@Customer.
+3. Supplemental pricing extracted at runtime from the current authenticated Oracle eSource PDF, only when calculator pricing is unavailable/incomplete or when the request is Exadata Cloud@Customer.
 4. Blank editable price fields with notes when no approved source is available.
 
 The skill must not invent Oracle SKU pricing.
+
+Before using eSource, decide whether the pricing calculator can produce the needed rows. If it can, use the calculator and do not hand-derive pricing from the eSource PDF. If the calculator cannot cover the row set, ask the user to authenticate to eSource, compare the current eSource document date with the persisted cache metadata, refresh the cached PDF when eSource is newer, and extract only the required rows.
 
 ## Supplemental Oracle eSource PDF Pricing
 
@@ -114,7 +116,7 @@ From the skill directory:
 ```bash
 python3 scripts/build_bom_template.py \
   --input-csv /tmp/estimator.csv \
-  --discount 0.15 \
+  --discount 15 \
   --reference-label "My Oracle Cloud BOM" \
   --output outputs/my-oracle-cloud-bom.xlsx
 ```
@@ -126,7 +128,7 @@ python3 scripts/build_bom_template.py \
   --input-csv /tmp/estimator.csv \
   --supplemental-pricing-csv /tmp/esource-exacc-pricing.csv \
   --supplemental-source-date "MM/DD/YYYY" \
-  --discount 0.15 \
+  --discount 15 \
   --reference-label "My Exadata Cloud@Customer BOM" \
   --output outputs/my-exacc-bom.xlsx
 ```
@@ -136,11 +138,19 @@ python3 scripts/build_bom_template.py \
 The generated workbook includes:
 
 - A primary `PAAS` worksheet by default.
-- Oracle estimator columns from `Part` through `Custom Note`.
-- A single editable discount input.
-- Discounted monthly and annual cost columns.
+- Oracle estimator columns plus discount columns, with `Custom Note` as the rightmost column.
+- A single editable discount input in `K3`.
+- Discounted monthly and annual cost columns before `Custom Note`.
 - Monthly and annual totals.
 - Estimate disclaimer text.
+
+The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
+
+The output columns are:
+
+`Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Discount %`, `Discounted Monthly Cost`, `Discounted Annual Cost`, `Custom Note`
+
+`Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 
 If a row has quantity and unit price but no monthly cost, the workbook calculates monthly list cost as:
 
@@ -166,9 +176,9 @@ PASS: outputs/my-oracle-cloud-bom.xlsx
 
 1. Gather architecture details or estimator rows.
 2. Ask for only the missing sizing details.
-3. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, create or obtain the Oracle pricing calculator configuration first and use its BOM rows as the input rows.
+3. Determine calculator coverage first. For standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, Database@AWS, and most non-Cloud@Customer OCI services, create or obtain the Oracle pricing calculator configuration first and use its BOM rows as the input rows.
 4. Build an estimator-style input CSV when needed.
-5. Open the current eSource PDF through browser authentication only if calculator pricing is incomplete or the request is Exadata Cloud@Customer.
+5. Open the current eSource PDF through browser authentication only if calculator pricing is incomplete/unavailable or the request is Exadata Cloud@Customer.
 6. Compare the eSource document date with the cached PDF metadata and replace the cache if eSource is newer.
 7. Extract only required supplemental pricing rows into a temporary CSV from the verified current PDF.
 8. Generate the workbook.

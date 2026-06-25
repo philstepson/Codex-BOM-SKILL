@@ -36,25 +36,28 @@ Add discount support without removing the Oracle estimator columns.
 
 Recommended columns:
 
-- `J`: `Discount %`
-- `K`: `Discounted Monthly Cost`
-- `L`: `Discounted Annual Cost`
+- `I`: `Discount %`
+- `J`: `Discounted Monthly Cost`
+- `K`: `Discounted Annual Cost`
+- `L`: `Custom Note`
 
 Recommended behavior:
 
 - Put one editable discount input above the table. The bundled builder uses `J3` for the `Discount %` label and `K3` for the editable discount value.
 - Row-level `Discount %` cells should reference the single discount input, not require duplicate manual entries.
+- The discount input should accept both whole-number percentages and decimal percentages. Treat values greater than `1` as whole-number percentages, so `15` and `0.15` both mean 15%.
 - `Discounted Monthly Cost` should equal the row's list `Monthly Cost` multiplied by `1 - discount`.
 - `Discounted Annual Cost` should equal discounted monthly cost multiplied by `12`.
 - Total rows should sum list monthly cost, discounted monthly cost, and discounted annual cost.
+- Keep `Custom Note` as the rightmost table column so long source notes do not interrupt the numeric estimate columns.
 
 ## Supplemental Pricing From Current PDF Sources
 
-Use Oracle Cost Estimator or Oracle pricing calculator output as the primary source. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, the calculator output is the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM and add discount/formula columns without changing the calculator price fields.
+Use Oracle Cost Estimator or Oracle pricing calculator output as the primary source. Check calculator coverage before using eSource for any BOM that is not clearly Exadata Cloud@Customer. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, the calculator output is the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM and add discount/formula columns without changing the calculator price fields.
 
 Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The default calculator configuration is a quarter rack with 2 database servers and 3 storage servers unless the user or calculator configuration says otherwise.
 
-When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback.
+When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback. Ask the user to authenticate to eSource only after the calculator path is unavailable or incomplete, or when the request is Exadata Cloud@Customer.
 
 Do not add persistent source-tracking columns for the supplemental PDF by default. Instead, keep the Oracle estimator columns unchanged and append a concise footnote to `Custom Note` for any row filled from the PDF. The note must identify Oracle eSource PDF pricing and include the document date from the PDF front page.
 
@@ -100,9 +103,9 @@ Assuming:
 
 Example formulas:
 
-- Discount percent: `=$K$3`
-- Discounted monthly cost: `=IF(G7="","",G7*(1-$K$3))`
-- Discounted annual cost: `=IF(K7="","",K7*12)`
+- Discount percent: `=IF($K$3>1,$K$3/100,$K$3)`
+- Discounted monthly cost: `=IF(G7="","",G7*(1-IF($K$3>1,$K$3/100,$K$3)))`
+- Discounted annual cost: `=IF(J7="","",J7*12)`
 
 If calculating list monthly cost from quantities:
 
@@ -110,7 +113,8 @@ If calculating list monthly cost from quantities:
 
 ## Formatting Guidance
 
-- Currency cells should use USD currency formatting unless the user provides another currency.
+- `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` should use whole-dollar currency formatting with comma separators, such as `$19,858`.
+- Keep `Unit Price` unrounded unless the source already supplies a rounded value, because hourly rates may need precision such as `0.0807`.
 - Discount cells should use percentage formatting.
 - Freeze panes below the header row.
 - Keep filters enabled on the BOM table.

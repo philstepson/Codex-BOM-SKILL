@@ -22,6 +22,13 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEMPLATE = ROOT / "assets" / "oracle-cost-estimator-sample.xlsx"
 DEFAULT_OUTPUT = ROOT / "outputs" / "sample-oracle-cloud-bom.xlsx"
+CURRENCY_NUM_FMT_ID = 164
+CURRENCY_NUM_FMT_CODE = '$#,##0'
+PERCENT_STYLE_ID = 9
+
+
+def discount_formula() -> str:
+    return 'IF($K$3>1,$K$3/100,$K$3)'
 
 
 @dataclass(frozen=True)
@@ -146,6 +153,43 @@ def row_xml(row_num: int, values: Iterable[object], styles: dict[int, int] | Non
     return f'<row r="{row_num}">{"".join(cells)}</row>'
 
 
+def currency_style_id(template: Path) -> int:
+    with ZipFile(template, "r") as workbook:
+        styles = workbook.read("xl/styles.xml").decode("utf-8")
+    match = re.search(r'<cellXfs count="(\d+)">', styles)
+    if not match:
+        raise ValueError(f"Unable to find cellXfs count in template styles: {template}")
+    return int(match.group(1))
+
+
+def workbook_styles_xml(template: Path) -> bytes:
+    """Return template styles plus a whole-dollar currency style."""
+    with ZipFile(template, "r") as workbook:
+        styles = workbook.read("xl/styles.xml").decode("utf-8")
+
+    if f'numFmtId="{CURRENCY_NUM_FMT_ID}"' not in styles:
+        num_fmt = (
+            f'<numFmts count="1"><numFmt numFmtId="{CURRENCY_NUM_FMT_ID}" '
+            f'formatCode="{html.escape(CURRENCY_NUM_FMT_CODE)}"/></numFmts>'
+        )
+        styles = styles.replace("<fonts ", f"{num_fmt}<fonts ", 1)
+
+    if f'numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="0"' not in styles:
+        styles = re.sub(
+            r'<cellXfs count="(\d+)">',
+            lambda match: f'<cellXfs count="{int(match.group(1)) + 1}">',
+            styles,
+            count=1,
+        )
+        currency_xf = (
+            f'<xf numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="0" fillId="0" borderId="0" '
+            'xfId="0" applyNumberFormat="1"/>'
+        )
+        styles = styles.replace("</cellXfs>", f"{currency_xf}</cellXfs>", 1)
+
+    return styles.encode("utf-8")
+
+
 def load_rows(csv_path: Path | None) -> list[BomRow]:
     if not csv_path:
         return SAMPLE_ROWS
@@ -259,7 +303,15 @@ def with_supplemental_pricing(
     return enriched
 
 
-def build_sheet(rows: list[BomRow], discount: float, reference_label: str, currency: str, realm: str, service_type: str) -> str:
+def build_sheet(
+    rows: list[BomRow],
+    discount: float,
+    reference_label: str,
+    currency: str,
+    realm: str,
+    service_type: str,
+    currency_style: int,
+) -> str:
     today = date.today().strftime("%m/%d/%Y")
     data_start = 7
     data_end = data_start + len(rows) - 1
@@ -269,7 +321,7 @@ def build_sheet(rows: list[BomRow], discount: float, reference_label: str, curre
     sheet_rows: list[str] = [
         row_xml(1, [f"Oracle Investment Proposal (as of {today})"]),
         row_xml(2, [f"Reference label: {reference_label}"]),
-        row_xml(3, [f"Currency: {currency}", "", "", "", "", "", "", "", "", "Discount %", discount]),
+        row_xml(3, [f"Currency: {currency}", "", "", "", "", "", "", "", "", "Discount %", discount], {11: PERCENT_STYLE_ID}),
         row_xml(4, [f"Realm: {realm}"]),
         row_xml(5, [f"Service Type: {service_type}"]),
         row_xml(
@@ -283,10 +335,10 @@ def build_sheet(rows: list[BomRow], discount: float, reference_label: str, curre
                 "Unit Price",
                 "Monthly Cost",
                 "Custom Label",
-                "Custom Note",
                 "Discount %",
                 "Discounted Monthly Cost",
                 "Discounted Annual Cost",
+                "Custom Note",
             ],
         ),
     ]
@@ -304,12 +356,12 @@ def build_sheet(rows: list[BomRow], discount: float, reference_label: str, curre
             cell(f"D{row_num}", bom.instance_qty),
             cell(f"E{row_num}", bom.usage_qty),
             cell(f"F{row_num}", bom.unit_price),
-            cell(f"G{row_num}", monthly_value, formula=monthly_formula),
+            cell(f"G{row_num}", monthly_value, formula=monthly_formula, style=currency_style),
             cell(f"H{row_num}", bom.custom_label),
-            cell(f"I{row_num}", bom.custom_note),
-            cell(f"J{row_num}", formula="$K$3"),
-            cell(f"K{row_num}", formula=f'IF(G{row_num}="","",G{row_num}*(1-$K$3))'),
-            cell(f"L{row_num}", formula=f'IF(K{row_num}="","",K{row_num}*12)'),
+            cell(f"I{row_num}", formula=discount_formula(), style=PERCENT_STYLE_ID),
+            cell(f"J{row_num}", formula=f'IF(G{row_num}="","",G{row_num}*(1-{discount_formula()}))', style=currency_style),
+            cell(f"K{row_num}", formula=f'IF(J{row_num}="","",J{row_num}*12)', style=currency_style),
+            cell(f"L{row_num}", bom.custom_note),
         ]
         sheet_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
 
@@ -317,10 +369,10 @@ def build_sheet(rows: list[BomRow], discount: float, reference_label: str, curre
         [
             f'<row r="{total_row}">'
             f'{cell(f"B{total_row}", "Monthly Total")}'
-            f'{cell(f"G{total_row}", formula=f"SUM(G{data_start}:G{data_end})")}'
-            f'{cell(f"J{total_row}", formula="$K$3")}'
-            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})")}'
-            f'{cell(f"L{total_row}", formula=f"SUM(L{data_start}:L{data_end})")}'
+            f'{cell(f"G{total_row}", formula=f"SUM(G{data_start}:G{data_end})", style=currency_style)}'
+            f'{cell(f"I{total_row}", formula=discount_formula(), style=PERCENT_STYLE_ID)}'
+            f'{cell(f"J{total_row}", formula=f"SUM(J{data_start}:J{data_end})", style=currency_style)}'
+            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})", style=currency_style)}'
             "</row>",
             row_xml(total_row + 2, ["Quote is for investment proposal only."]),
             row_xml(
@@ -335,7 +387,7 @@ def build_sheet(rows: list[BomRow], discount: float, reference_label: str, curre
 
     cols = "".join(
         f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>'
-        for idx, width in enumerate([16, 72, 12, 14, 12, 12, 14, 20, 28, 12, 22, 22], start=1)
+        for idx, width in enumerate([16, 72, 12, 14, 12, 12, 14, 20, 12, 22, 22, 28], start=1)
     )
     dimension = f"A1:L{disclaimer_row}"
     sheet_data = "".join(sheet_rows)
@@ -359,6 +411,8 @@ def write_workbook(template: Path, output: Path, sheet_xml: str) -> None:
             data = src.read(info.filename)
             if info.filename == "xl/worksheets/sheet1.xml":
                 data = sheet_xml.encode("utf-8")
+            elif info.filename == "xl/styles.xml":
+                data = workbook_styles_xml(template)
             dst.writestr(info, data)
 
 
@@ -387,7 +441,15 @@ def main() -> None:
     rows = load_rows(args.input_csv)
     supplemental_prices = load_supplemental_prices(args.supplemental_pricing_csv)
     rows = with_supplemental_pricing(rows, supplemental_prices, args.supplemental_source_date)
-    sheet_xml = build_sheet(rows, args.discount, args.reference_label, args.currency, args.realm, args.service_type)
+    sheet_xml = build_sheet(
+        rows,
+        args.discount,
+        args.reference_label,
+        args.currency,
+        args.realm,
+        args.service_type,
+        currency_style_id(args.template),
+    )
     write_workbook(args.template, args.output, sheet_xml)
     print(args.output)
 

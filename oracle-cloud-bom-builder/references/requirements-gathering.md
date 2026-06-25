@@ -13,7 +13,7 @@ Ask these when missing:
 - Currency, defaulting to `USD` only if not specified.
 - Number of environments, such as production, non-production, test, and disaster recovery.
 - Expected hours per month, usually `744` for always-on resources.
-- Desired discount percentage.
+- Desired discount percentage. The generated workbook accepts either whole-number entry such as `15` or decimal entry such as `0.15`.
 - License model: BYOL, license included, Universal Credits, or unknown.
 - Whether pricing should be list-price only, discounted estimate, or both.
 
@@ -164,4 +164,4 @@ When the user cannot answer a required pricing parameter:
 
 Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data, authenticated Oracle pricing calculator output, or current Oracle pricing sources only when explicitly requested and verified.
 
-For Exadata Cloud@Customer and other resources that Oracle Cost Estimator or the Oracle pricing calculator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. A local PDF cache may be used only after checking the current eSource document date. Replace the cached PDF if eSource has a newer document date, then extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not treat previously extracted pricing tables as authoritative across runs.
+Before asking the user to authenticate to eSource, determine whether Oracle Cost Estimator or the Oracle pricing calculator can cover the requested rows. Use the calculator first for nearly all non-Cloud@Customer BOMs. For Exadata Cloud@Customer and other resources that Oracle Cost Estimator or the Oracle pricing calculator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. A local PDF cache may be used only after checking the current eSource document date. Replace the cached PDF if eSource has a newer document date, then extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not treat previously extracted pricing tables as authoritative across runs.

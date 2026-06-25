@@ -1,0 +1,5 @@
+Part,Description,Part Qty,Instance Qty,Usage Qty,Unit Price,Monthly Cost,Custom Label,Custom Note
+,Exadata Database Service on Cloud@Customer X11M,,,,,,,"BOM baseline: single default rack; elastic configuration; High redundancy; BYOL software licensing; 64 database ECPUs. Pricing sourced from authenticated Oracle eSource PDF, document date June 11, 2026."
+B110635,Exadata Cloud@Customer - Rack - X11M,1,1,1,6565.00,,,"Includes 2 Exadata Database Servers with 1390 usable GB RAM per node. Requires 3 or more Exadata Storage Servers. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."
+B110647,Exadata Cloud@Customer - Storage Server - X11M,3,1,1,3150.00,,,"High Capacity storage server; includes 1 Exadata Storage Server with 80 TB usable storage. High redundancy is assumed. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."
+B110663,Oracle Exadata Cloud@Customer Database ECPU - BYOL,64,1,744,0.0807,,"BYOL","Used with Exadata Cloud@Customer Racks X11M and later. 64 BYOL ECPUs running 744 hours/month. Pricing sourced from Oracle eSource PDF, document date June 11, 2026."

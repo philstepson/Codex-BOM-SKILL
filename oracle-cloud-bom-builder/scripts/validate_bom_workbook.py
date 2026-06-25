@@ -21,10 +21,10 @@ EXPECTED_HEADERS = [
     "Unit Price",
     "Monthly Cost",
     "Custom Label",
-    "Custom Note",
     "Discount %",
     "Discounted Monthly Cost",
     "Discounted Annual Cost",
+    "Custom Note",
 ]
 
 
@@ -72,12 +72,14 @@ def main() -> None:
         fail("Missing discount label in J3")
     if not cells.get("K3"):
         fail("Missing discount value in K3")
-    if not any(value.startswith("=IF(G") and "*(1-$K$3)" in value for value in cells.values()):
+    if not any(value.startswith("=IF(G") and "*(1-IF($K$3>1,$K$3/100,$K$3))" in value for value in cells.values()):
         fail("Missing discounted monthly formula")
-    if not any(value.startswith("=IF(K") and "*12" in value for value in cells.values()):
+    if not any(value.startswith("=IF(J") and "*12" in value for value in cells.values()):
         fail("Missing discounted annual formula")
-    if not any(re.fullmatch(r"=SUM\(K\d+:K\d+\)", value) for value in cells.values()):
+    if not any(re.fullmatch(r"=SUM\(J\d+:J\d+\)", value) for value in cells.values()):
         fail("Missing discounted monthly total formula")
+    if not any(re.fullmatch(r"=SUM\(K\d+:K\d+\)", value) for value in cells.values()):
+        fail("Missing discounted annual total formula")
     if "Disclaimer:" not in " ".join(cells.values()):
         fail("Missing estimate disclaimer")
 
