@@ -50,11 +50,15 @@ Recommended behavior:
 
 ## Supplemental Pricing From Current PDF Sources
 
-Use Oracle Cost Estimator pricing as the primary source. When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback.
+Use Oracle Cost Estimator or Oracle pricing calculator output as the primary source. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, the calculator output is the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM and add discount/formula columns without changing the calculator price fields.
+
+Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The default calculator configuration is a quarter rack with 2 database servers and 3 storage servers unless the user or calculator configuration says otherwise.
+
+When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback.
 
 Do not add persistent source-tracking columns for the supplemental PDF by default. Instead, keep the Oracle estimator columns unchanged and append a concise footnote to `Custom Note` for any row filled from the PDF. The note must identify Oracle eSource PDF pricing and include the document date from the PDF front page.
 
-The supplemental PDF or extracted pricing table should not be committed into the skill repository. Use a temporary CSV during the build when script input is needed.
+A local supplemental PDF cache may be maintained, but it must be date-checked against the eSource URL before each pricing run. Replace the cached PDF when the eSource document date is newer. The extracted pricing table should remain a temporary runtime CSV and should not be treated as authoritative across runs.
 
 ## Exadata Cloud@Customer X11M Sample Baseline
 

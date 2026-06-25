@@ -35,6 +35,7 @@ Ask:
 
 For Exadata Database Service, also ask:
 
+- Platform: OCI Dedicated Exadata, Database@Azure, Database@Google Cloud, Database@AWS, or Exadata Cloud@Customer.
 - Infrastructure generation or model if known.
 - Number of database servers.
 - Number of storage servers.
@@ -43,6 +44,15 @@ For Exadata Database Service, also ask:
 - Rack configuration, expansion rack details, or other Cloud@Customer infrastructure components when applicable.
 - ECPU quantity.
 - Dedicated infrastructure or Cloud@Customer.
+
+For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS:
+
+- Use the Oracle pricing calculator output as the source of truth for SKU rows, quantities, unit prices, and monthly costs.
+- Treat Database@Azure, Database@Google Cloud, and Database@AWS as Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing.
+- Ask for BYOL or License Included when the prompt does not specify the license model.
+- Ask for the Exadata generation/model if the user might need a prior version. If omitted and the user has not requested a prior generation, state that the latest calculator model is assumed.
+- Start from the calculator default quarter rack, 2 database servers, and 3 storage servers unless the user asks for another base configuration.
+- Ask for any additional database servers or storage servers because those change the relevant calculator SKU quantities.
 
 For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cloud-at-customer-x11m.md` and gather:
 
@@ -152,6 +162,6 @@ When the user cannot answer a required pricing parameter:
 - Add a note explaining the missing input.
 - Preserve formulas where possible so values calculate after the missing inputs are entered.
 
-Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data or current Oracle pricing sources only when explicitly requested and verified.
+Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data, authenticated Oracle pricing calculator output, or current Oracle pricing sources only when explicitly requested and verified.
 
-For Exadata Cloud@Customer and other resources that Oracle Cost Estimator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. Extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not store the source PDF or extracted pricing table in the skill repository.
+For Exadata Cloud@Customer and other resources that Oracle Cost Estimator or the Oracle pricing calculator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. A local PDF cache may be used only after checking the current eSource document date. Replace the cached PDF if eSource has a newer document date, then extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not treat previously extracted pricing tables as authoritative across runs.

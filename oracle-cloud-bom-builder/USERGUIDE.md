@@ -13,6 +13,7 @@ Use the skill when you need:
 - An Oracle Cloud BOM spreadsheet.
 - A discount-enabled Oracle Cost Estimator-style workbook.
 - A workbook from Oracle Cost Estimator rows or an architecture description.
+- A standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, or Database@AWS BOM based on Oracle pricing calculator rows.
 - Exadata Cloud@Customer BOM rows that include infrastructure resources not fully covered by the calculator.
 
 ## Inputs The Skill Needs
@@ -32,6 +33,21 @@ Common inputs include:
 - Part/SKU numbers, when known.
 - Part quantity, instance quantity, usage quantity, unit price, and monthly cost.
 - Custom labels or notes for architecture assumptions.
+
+## Standard Exadata And Database@ Inputs
+
+For Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, the Oracle pricing calculator is the go-to source for SKU rows and pricing. Database@ platforms use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing.
+
+The calculator default is a quarter rack with 2 database servers and 3 storage servers. Ask for any additional database servers or storage servers and let the calculator update the related SKU quantities before transposing the rows into the BOM.
+
+Prompt for these values when missing:
+
+- Platform: OCI Dedicated Exadata, Database@Azure, Database@Google Cloud, or Database@AWS.
+- License model: BYOL or License Included.
+- Exadata generation/model. Default to the latest model only when the user does not ask for a previous generation.
+- ECPU quantity.
+- Additional database server count and additional storage server count, if any.
+- Region, currency, realm, and discount percentage when needed for the workbook.
 
 ## Exadata Cloud@Customer Inputs
 
@@ -66,9 +82,10 @@ Create a BOM for an Exadata Cloud@Customer X11M single-rack baseline with 3 High
 
 The skill uses this pricing order:
 
-1. Oracle Cost Estimator values supplied by the user or source file.
-2. Supplemental pricing extracted at runtime from the current authenticated Oracle eSource PDF, only when calculator pricing is missing.
-3. Blank editable price fields with notes when neither source is available.
+1. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session.
+2. User-provided estimator-style rows from an approved source.
+3. Supplemental pricing extracted at runtime from the current authenticated Oracle eSource PDF, only when calculator pricing is missing or when the request is Exadata Cloud@Customer.
+4. Blank editable price fields with notes when no approved source is available.
 
 The skill must not invent Oracle SKU pricing.
 
@@ -80,7 +97,9 @@ Current supplemental source:
 
 `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`
 
-Use browser authentication to open the current PDF. Do not save or commit the PDF into the skill repository. Extract only the rows needed for the active BOM into a temporary CSV.
+Use browser authentication to open the current PDF. A local PDF cache may be kept for repeatability, but it must be checked against eSource before each pricing run. If the eSource document date is newer than the cached document date, replace the cached PDF before extracting rows.
+
+Do not treat the cached PDF as authoritative until the eSource date check passes. Extract only the rows needed for the active BOM into a temporary CSV.
 
 The supplemental CSV can use these headers:
 
@@ -147,13 +166,15 @@ PASS: outputs/my-oracle-cloud-bom.xlsx
 
 1. Gather architecture details or estimator rows.
 2. Ask for only the missing sizing details.
-3. Build an estimator-style input CSV when needed.
-4. Open the current eSource PDF through browser authentication only if calculator pricing is incomplete.
-5. Extract only required supplemental pricing rows into a temporary CSV.
-6. Generate the workbook.
-7. Validate the workbook.
-8. Review rows with blank prices or PDF-sourced notes.
-9. Deliver the `.xlsx` file and state any assumptions.
+3. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, create or obtain the Oracle pricing calculator configuration first and use its BOM rows as the input rows.
+4. Build an estimator-style input CSV when needed.
+5. Open the current eSource PDF through browser authentication only if calculator pricing is incomplete or the request is Exadata Cloud@Customer.
+6. Compare the eSource document date with the cached PDF metadata and replace the cache if eSource is newer.
+7. Extract only required supplemental pricing rows into a temporary CSV from the verified current PDF.
+8. Generate the workbook.
+9. Validate the workbook.
+10. Review rows with blank prices or PDF-sourced notes.
+11. Deliver the `.xlsx` file and state any assumptions.
 
 ## Common Follow-Up Questions
 
@@ -161,15 +182,18 @@ The skill may ask:
 
 - Do you have Oracle Cost Estimator export rows?
 - What discount percentage should apply?
+- Is this OCI Dedicated Exadata, Database@Azure, Database@Google Cloud, Database@AWS, or Exadata Cloud@Customer?
 - What Exadata generation, rack count, and server counts should be used?
 - Should the software license model be License Included or BYOL?
+- Are there additional database servers or storage servers beyond the calculator's quarter-rack default of 2 database servers and 3 storage servers?
 - Should storage use the default High redundancy assumption or Normal redundancy?
 - Should blank rows be left editable when pricing is unavailable?
 - What is the document date on the supplemental PDF front page?
+- Has the cached price-list PDF been checked against the current eSource document date for this run?
 
 ## Limitations
 
 - The workbook is an estimate, not an Oracle quote.
 - The skill cannot price private or authenticated sources unless access is available during the session.
-- The current PDF should be used live at runtime; stale extracted pricing files should not be reused as authoritative sources.
+- The cached PDF must be date-checked against eSource before use; stale cached PDFs or extracted pricing files should not be reused as authoritative sources.
 - If a calculator row already has pricing, supplemental PDF pricing does not overwrite it.

@@ -16,14 +16,16 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
    - Service type, usually `PAAS`, unless the user provides another Oracle service category.
    - Any named OCI services, custom labels, notes, architecture assumptions, and region/currency details.
    - Supplemental pricing source details when calculator data is incomplete, especially the current Oracle eSource PDF URL and the document date shown on the PDF front page.
-2. If the architecture is described but estimator inputs are missing, read `references/requirements-gathering.md` and ask the smallest useful set of sizing questions for the named services.
-3. Create a new `.xlsx` workbook using the Oracle Cost Estimator format as the base layout.
-4. Keep the original Oracle list-price fields intact and editable.
-5. Add a single editable discount percentage input that applies to all final list-price values.
-6. Add formula-driven discounted totals; do not hardcode values that should update when the discount changes.
-7. Preserve source assumptions and add clear notes that prices are estimates unless the user provides formal quote data.
-8. For resources not fully covered by Oracle Cost Estimator, use the current authenticated supplemental source only at runtime and do not persist a copy of the source PDF in the skill or repository.
-9. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
+2. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS requests, use the Oracle pricing calculator output as the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM format without changing the calculator price fields.
+3. If the architecture is described but estimator inputs are missing, read `references/requirements-gathering.md` and ask the smallest useful set of sizing questions for the named services.
+4. Prompt for any parameter required for a valid configuration when it is missing. For Exadata requests this includes platform, license model, Exadata generation/model when not defaulting to latest, ECPU quantity, database server count, storage server count, and any additional database or storage servers beyond the calculator default.
+5. Create a new `.xlsx` workbook using the Oracle Cost Estimator format as the base layout.
+6. Keep the original Oracle list-price fields intact and editable.
+7. Add a single editable discount percentage input that applies to all final list-price values.
+8. Add formula-driven discounted totals; do not hardcode values that should update when the discount changes.
+9. Preserve source assumptions and add clear notes that prices are estimates unless the user provides formal quote data.
+10. For resources not fully covered by Oracle Cost Estimator, verify the managed Oracle eSource price-list PDF cache before extracting supplemental prices. Read `references/esource-price-list-cache.md` before using cached PDF pricing.
+11. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
 
 ## Workbook Format
 
@@ -49,7 +51,9 @@ Prioritize Oracle Platform Services. Also include any OCI service the user names
 
 If the user provides a service name without SKU details, include it as a line item with blank editable SKU/pricing fields and add a note that pricing requires Oracle Cost Estimator or formal quote input.
 
-For Exadata Cloud@Customer, explicitly gather model-level resource details because Oracle Cost Estimator may only expose ECPU-oriented pricing. Ask for database server model/count, storage server model/count, rack configuration, and any other Cloud@Customer infrastructure components the user expects in the BOM.
+For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, use the Oracle pricing calculator as the go-to pricing and SKU source. Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The calculator default is a quarter rack with 2 database servers and 3 storage servers; additional database or storage servers should be reflected by the calculator-generated SKU quantities before the rows are transposed into the BOM.
+
+For Exadata Cloud@Customer, explicitly gather model-level resource details because Oracle Cost Estimator may not cover the C@C infrastructure pricing path. Ask for database server model/count, storage server model/count, rack configuration, and any other Cloud@Customer infrastructure components the user expects in the BOM.
 
 When the requested BOM includes Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cloud-at-customer-x11m.md` before asking questions or preparing rows. Use it to validate allowable database server types, storage server types, server counts, VM/cluster limits, rack limits, storage capacity assumptions, and networking/facility assumptions.
 
@@ -65,9 +69,12 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 
 - Treat Oracle Cost Estimator values as list-price estimates.
 - Preserve `Unit Price` and `Monthly Cost` as list-price fields.
-- Prefer Oracle Cost Estimator pricing when it provides a complete price for a row.
+- Prefer Oracle Cost Estimator or Oracle pricing calculator output when it provides a complete price for a row.
+- For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, use the calculator output as authoritative for SKUs, row quantities, unit prices, and monthly costs. Do not replace those rows with hand-derived eSource pricing when calculator output is available.
+- When a user asks for a Database@Azure, Database@Google Cloud, or Database@AWS Exadata BOM and omits the license model, ask whether the configuration is BYOL or License Included before pricing. When the Exadata generation/model is omitted, default to the latest model only after stating that assumption, unless the user asks for a prior generation.
 - If Oracle Cost Estimator does not provide the needed SKU or price for a row, use the current Oracle eSource PDF supplied by the user as a supplemental fallback source.
-- The current supplemental PDF URL is `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`; open it through browser authentication when needed rather than persisting a copy in the repo.
+- The current supplemental PDF URL is `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`; open it through browser authentication when needed.
+- A local PDF cache is allowed for repeatability, but it must be refreshed from eSource before each pricing run when the eSource document date is newer than the cached document date. Follow `references/esource-price-list-cache.md`.
 - Extract only the rows needed for the BOM from the authenticated PDF into a temporary runtime CSV, then pass that CSV to `scripts/build_bom_template.py` with `--supplemental-pricing-csv`.
 - Capture the document date from the PDF front page and pass it with `--supplemental-source-date`; when supplemental PDF pricing is used, add a footnote in `Custom Note` identifying Oracle eSource PDF pricing and that document date.
 - Discount input should be a percentage, for example `15%`.
