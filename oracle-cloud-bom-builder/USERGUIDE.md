@@ -24,6 +24,8 @@ For the cleanest result, provide Oracle Cost Estimator-style rows with these col
 
 `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Custom Note`
 
+You may also include `Environment` or `Env`. If omitted, the generated customer-facing BOM uses `General`.
+
 If you do not have estimator rows, describe the architecture and include the quantities you know. The skill should ask only for the missing sizing details needed for the named services.
 
 Common inputs include:
@@ -182,6 +184,7 @@ python3 scripts/build_bom_template.py \
 The generated workbook includes:
 
 - A primary `PAAS` worksheet by default.
+- A visible `Customer BOM` worksheet that lists environment, all SKUs, quantities, metrics or billing basis, and list prices only.
 - Oracle estimator columns plus discount columns, with `Custom Note` as the rightmost column.
 - A single editable discount input in `K3`.
 - Discounted monthly and annual cost columns before `Custom Note`.
@@ -192,9 +195,15 @@ The generated workbook includes:
 
 The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
 
+The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes monthly, annual, and one-time list-price totals.
+
 The output columns are:
 
 `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Discount %`, `Discounted Monthly Cost`, `Discounted Annual Cost`, `Custom Note`
+
+The customer-facing columns are:
+
+`Environment`, `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Billing Basis`, `Unit List Price`, `Monthly List Price`, `Annual List Price`, `One-Time List Price`, `Customer Note`
 
 `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 
@@ -236,7 +245,7 @@ Expected success output:
 PASS: outputs/my-oracle-cloud-bom.xlsx
 ```
 
-The validator checks table structure, discount formulas, total formulas, estimate disclaimer text, cached total values, and workbook recalculation settings.
+The validator checks table structure, discount formulas, total formulas, customer-facing list-price sheet structure, estimate disclaimer text, cached total values, and workbook recalculation settings.
 
 ## Practical Workflow
 

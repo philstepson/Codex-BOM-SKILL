@@ -138,6 +138,8 @@ Optional CSV input must use these headers:
 
 `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Custom Note`
 
+Optional CSV input may also include `Environment` or `Env`. When omitted, generated customer-facing rows use `General`.
+
 Optional supplemental pricing CSV input is intended for temporary rows extracted from the current authenticated Oracle eSource PDF. Supported headers are:
 
 `Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Source Document Date`, `Source Note`

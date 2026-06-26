@@ -42,6 +42,7 @@ class BomRow:
     monthly_cost: str | int | float = ""
     custom_label: str = ""
     custom_note: str = ""
+    environment: str = ""
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,28 @@ def is_one_time_row(row: BomRow) -> bool:
     return "one time" in text or "non metered" in text
 
 
+def row_monthly_cost(row: BomRow) -> tuple[str | int | float, str | None, float | None]:
+    """Return displayed monthly value, optional formula, and initial cached value."""
+    monthly_value = row.monthly_cost
+    monthly_formula = None
+    monthly_cache = number_or_none(monthly_value)
+    if monthly_value == "" and all(is_number(v) for v in [row.part_qty, row.instance_qty, row.usage_qty, row.unit_price]):
+        monthly_formula = "{part_qty}*{instance_qty}*{usage_qty}*{unit_price}"
+        monthly_cache = (
+            number_or_none(row.part_qty)
+            * number_or_none(row.instance_qty)
+            * number_or_none(row.usage_qty)
+            * number_or_none(row.unit_price)
+        )
+    return monthly_value, monthly_formula, monthly_cache
+
+
+def row_one_time_cost(row: BomRow) -> float | None:
+    if is_one_time_row(row) and all(is_number(v) for v in [row.part_qty, row.instance_qty, row.unit_price]):
+        return number_or_none(row.part_qty) * number_or_none(row.instance_qty) * number_or_none(row.unit_price)
+    return None
+
+
 def cell(
     ref: str,
     value: object = "",
@@ -246,6 +269,7 @@ def load_rows(csv_path: Path | None) -> list[BomRow]:
                     item.get("Monthly Cost", ""),
                     item.get("Custom Label", ""),
                     item.get("Custom Note", ""),
+                    item.get("Environment", "") or item.get("Env", ""),
                 )
             )
     return rows
@@ -335,6 +359,7 @@ def with_supplemental_pricing(
                 monthly_cost=price.monthly_cost,
                 custom_label=row.custom_label,
                 custom_note=custom_note,
+                environment=row.environment,
             )
         )
     return enriched
@@ -386,17 +411,10 @@ def build_sheet(
 
     for offset, bom in enumerate(rows):
         row_num = data_start + offset
+        monthly_value, monthly_formula_template, monthly_cache = row_monthly_cost(bom)
         monthly_formula = None
-        monthly_value = bom.monthly_cost
-        monthly_cache = number_or_none(monthly_value)
-        if monthly_value == "" and all(is_number(v) for v in [bom.part_qty, bom.instance_qty, bom.usage_qty, bom.unit_price]):
+        if monthly_formula_template is not None:
             monthly_formula = f'IF(OR(C{row_num}="",D{row_num}="",E{row_num}="",F{row_num}=""),"",C{row_num}*D{row_num}*E{row_num}*F{row_num})'
-            monthly_cache = (
-                number_or_none(bom.part_qty)
-                * number_or_none(bom.instance_qty)
-                * number_or_none(bom.usage_qty)
-                * number_or_none(bom.unit_price)
-            )
         discounted_monthly_cache = (
             monthly_cache * (1 - normalized_discount) if monthly_cache is not None else None
         )
@@ -415,9 +433,7 @@ def build_sheet(
                 f"C{row_num}*D{row_num}*F{row_num}*(1-{discount_formula()}))"
             )
             annual_cache = (
-                number_or_none(bom.part_qty)
-                * number_or_none(bom.instance_qty)
-                * number_or_none(bom.unit_price)
+                row_one_time_cost(bom)
                 * (1 - normalized_discount)
             )
         monthly_caches.append(monthly_cache)
@@ -482,20 +498,191 @@ def build_sheet(
 </worksheet>'''
 
 
-def write_workbook(template: Path, output: Path, sheet_xml: str) -> None:
+def build_customer_sheet(
+    rows: list[BomRow],
+    reference_label: str,
+    currency: str,
+    realm: str,
+    currency_style: int,
+) -> str:
+    today = date.today().strftime("%m/%d/%Y")
+    data_start = 7
+    data_end = data_start + len(rows) - 1
+    total_row = data_end + 1
+    disclaimer_row = total_row + 4
+    monthly_caches: list[float | None] = []
+    annual_caches: list[float | None] = []
+    one_time_caches: list[float | None] = []
+
+    sheet_rows: list[str] = [
+        row_xml(1, [f"Customer BOM (as of {today})"]),
+        row_xml(2, [f"Reference label: {reference_label}"]),
+        row_xml(3, [f"Currency: {currency}"]),
+        row_xml(4, [f"Realm: {realm}"]),
+        row_xml(5, ["List-price customer view. Discount calculations are intentionally omitted."]),
+        row_xml(
+            6,
+            [
+                "Environment",
+                "Part",
+                "Description",
+                "Part Qty",
+                "Instance Qty",
+                "Usage Qty",
+                "Billing Basis",
+                "Unit List Price",
+                "Monthly List Price",
+                "Annual List Price",
+                "One-Time List Price",
+                "Customer Note",
+            ],
+        ),
+    ]
+
+    for offset, bom in enumerate(rows):
+        row_num = data_start + offset
+        monthly_value, monthly_formula_template, monthly_cache = row_monthly_cost(bom)
+        one_time_cache = row_one_time_cost(bom)
+        is_one_time = one_time_cache is not None and monthly_cache is None
+
+        monthly_formula = None
+        annual_formula = None
+        one_time_formula = None
+        annual_cache = monthly_cache * 12 if monthly_cache is not None else None
+
+        if monthly_formula_template is not None:
+            monthly_formula = f'IF(OR(D{row_num}="",E{row_num}="",F{row_num}="",H{row_num}=""),"",D{row_num}*E{row_num}*F{row_num}*H{row_num})'
+        if monthly_cache is not None:
+            annual_formula = f'IF(I{row_num}="","",I{row_num}*12)'
+        if is_one_time:
+            one_time_formula = f'IF(OR(D{row_num}="",E{row_num}="",H{row_num}=""),"",D{row_num}*E{row_num}*H{row_num})'
+        else:
+            one_time_cache = None
+
+        monthly_caches.append(monthly_cache)
+        annual_caches.append(annual_cache)
+        one_time_caches.append(one_time_cache)
+
+        billing_basis = "One-time" if is_one_time else ("Recurring usage" if monthly_cache is not None else "")
+        environment = bom.environment or "General"
+        note = bom.custom_note
+        cells = [
+            cell(f"A{row_num}", environment),
+            cell(f"B{row_num}", bom.part),
+            cell(f"C{row_num}", bom.description),
+            cell(f"D{row_num}", bom.part_qty),
+            cell(f"E{row_num}", bom.instance_qty),
+            cell(f"F{row_num}", bom.usage_qty),
+            cell(f"G{row_num}", billing_basis),
+            cell(f"H{row_num}", bom.unit_price),
+            cell(f"I{row_num}", monthly_value, formula=monthly_formula, style=currency_style, formula_value=cached_value(monthly_cache)),
+            cell(f"J{row_num}", formula=annual_formula, style=currency_style, formula_value=cached_value(annual_cache)),
+            cell(f"K{row_num}", formula=one_time_formula, style=currency_style, formula_value=cached_value(one_time_cache)),
+            cell(f"L{row_num}", note),
+        ]
+        sheet_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
+
+    monthly_total_cache = sum(value for value in monthly_caches if value is not None)
+    annual_total_cache = sum(value for value in annual_caches if value is not None)
+    one_time_total_cache = sum(value for value in one_time_caches if value is not None)
+
+    sheet_rows.extend(
+        [
+            f'<row r="{total_row}">'
+            f'{cell(f"C{total_row}", "Customer BOM Total")}'
+            f'{cell(f"I{total_row}", formula=f"SUM(I{data_start}:I{data_end})", style=currency_style, formula_value=cached_value(monthly_total_cache))}'
+            f'{cell(f"J{total_row}", formula=f"SUM(J{data_start}:J{data_end})", style=currency_style, formula_value=cached_value(annual_total_cache))}'
+            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})", style=currency_style, formula_value=cached_value(one_time_total_cache))}'
+            "</row>",
+            row_xml(total_row + 2, ["Customer-facing view shows list prices only."]),
+            row_xml(
+                disclaimer_row,
+                [
+                    "Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. "
+                    "It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."
+                ],
+            ),
+        ]
+    )
+
+    cols = "".join(
+        f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>'
+        for idx, width in enumerate([18, 16, 72, 12, 14, 12, 18, 16, 18, 18, 18, 34], start=1)
+    )
+    dimension = f"A1:L{disclaimer_row}"
+    sheet_data = "".join(sheet_rows)
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="{dimension}"/>
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>{cols}</cols>
+  <sheetData>{sheet_data}</sheetData>
+  <autoFilter ref="A6:L{total_row}"/>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>'''
+
+
+def workbook_rels_xml(template: Path) -> bytes:
+    with ZipFile(template, "r") as workbook:
+        rels = workbook.read("xl/_rels/workbook.xml.rels").decode("utf-8")
+
+    if 'Target="worksheets/sheet2.xml"' not in rels:
+        customer_rel = (
+            '<Relationship Id="rId5" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+            'Target="worksheets/sheet2.xml"/>'
+        )
+        rels = rels.replace("</Relationships>", f"{customer_rel}</Relationships>", 1)
+    return rels.encode("utf-8")
+
+
+def content_types_xml(template: Path) -> bytes:
+    with ZipFile(template, "r") as workbook:
+        content_types = workbook.read("[Content_Types].xml").decode("utf-8")
+
+    if 'PartName="/xl/worksheets/sheet2.xml"' not in content_types:
+        override = (
+            '<Override PartName="/xl/worksheets/sheet2.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        )
+        content_types = content_types.replace("</Types>", f"{override}</Types>", 1)
+    return content_types.encode("utf-8")
+
+
+def workbook_with_customer_sheet_xml(template: Path) -> bytes:
+    workbook_xml_text = workbook_xml(template).decode("utf-8")
+    if 'name="Customer BOM"' not in workbook_xml_text:
+        customer_sheet = '<sheet sheetId="2" name="Customer BOM" state="visible" r:id="rId5"/>'
+        workbook_xml_text = workbook_xml_text.replace("</sheets>", f"{customer_sheet}</sheets>", 1)
+    return workbook_xml_text.encode("utf-8")
+
+
+def write_workbook(template: Path, output: Path, sheet_xml: str, customer_sheet_xml: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(template, "r") as src, ZipFile(output, "w", ZIP_DEFLATED) as dst:
+        wrote_customer_sheet = False
         for info in src.infolist():
             data = src.read(info.filename)
             if info.filename == "xl/worksheets/sheet1.xml":
                 data = sheet_xml.encode("utf-8")
+            elif info.filename == "xl/worksheets/sheet2.xml":
+                data = customer_sheet_xml.encode("utf-8")
+                wrote_customer_sheet = True
             elif info.filename == "xl/styles.xml":
                 data = workbook_styles_xml(template)
             elif info.filename == "xl/workbook.xml":
-                data = workbook_xml(template)
+                data = workbook_with_customer_sheet_xml(template)
+            elif info.filename == "xl/_rels/workbook.xml.rels":
+                data = workbook_rels_xml(template)
+            elif info.filename == "[Content_Types].xml":
+                data = content_types_xml(template)
             elif info.filename == "xl/calcChain.xml":
                 continue
             dst.writestr(info, data)
+        if not wrote_customer_sheet:
+            dst.writestr("xl/worksheets/sheet2.xml", customer_sheet_xml.encode("utf-8"))
 
 
 def main() -> None:
@@ -523,6 +710,7 @@ def main() -> None:
     rows = load_rows(args.input_csv)
     supplemental_prices = load_supplemental_prices(args.supplemental_pricing_csv)
     rows = with_supplemental_pricing(rows, supplemental_prices, args.supplemental_source_date)
+    currency_style = currency_style_id(args.template)
     sheet_xml = build_sheet(
         rows,
         args.discount,
@@ -530,9 +718,16 @@ def main() -> None:
         args.currency,
         args.realm,
         args.service_type,
-        currency_style_id(args.template),
+        currency_style,
     )
-    write_workbook(args.template, args.output, sheet_xml)
+    customer_sheet_xml = build_customer_sheet(
+        rows,
+        args.reference_label,
+        args.currency,
+        args.realm,
+        currency_style,
+    )
+    write_workbook(args.template, args.output, sheet_xml, customer_sheet_xml)
     print(args.output)
 
 

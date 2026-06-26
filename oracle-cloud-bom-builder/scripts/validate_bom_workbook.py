@@ -26,6 +26,20 @@ EXPECTED_HEADERS = [
     "Discounted Annual Cost",
     "Custom Note",
 ]
+EXPECTED_CUSTOMER_HEADERS = [
+    "Environment",
+    "Part",
+    "Description",
+    "Part Qty",
+    "Instance Qty",
+    "Usage Qty",
+    "Billing Basis",
+    "Unit List Price",
+    "Monthly List Price",
+    "Annual List Price",
+    "One-Time List Price",
+    "Customer Note",
+]
 
 
 def cell_text(cell: ET.Element) -> str:
@@ -39,9 +53,9 @@ def cell_text(cell: ET.Element) -> str:
     return value.text if value is not None and value.text is not None else ""
 
 
-def read_sheet(path: Path) -> dict[str, str]:
+def read_sheet(path: Path, workbook_part: str = "xl/worksheets/sheet1.xml") -> dict[str, str]:
     with ZipFile(path) as workbook:
-        root = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+        root = ET.fromstring(workbook.read(workbook_part))
     cells: dict[str, str] = {}
     for cell in root.findall(".//x:c", NS):
         ref = cell.attrib.get("r")
@@ -53,6 +67,11 @@ def read_sheet(path: Path) -> dict[str, str]:
 def read_xml(path: Path, workbook_part: str) -> ET.Element:
     with ZipFile(path) as workbook:
         return ET.fromstring(workbook.read(workbook_part))
+
+
+def workbook_parts(path: Path) -> set[str]:
+    with ZipFile(path) as workbook:
+        return set(workbook.namelist())
 
 
 def fail(message: str) -> None:
@@ -88,7 +107,36 @@ def main() -> None:
     if "Disclaimer:" not in " ".join(cells.values()):
         fail("Missing estimate disclaimer")
 
+    parts = workbook_parts(args.workbook)
+    if "xl/worksheets/sheet2.xml" not in parts:
+        fail("Missing customer-facing BOM worksheet")
+
+    customer_cells = read_sheet(args.workbook, "xl/worksheets/sheet2.xml")
+    customer_headers = [customer_cells.get(f"{chr(65 + idx)}6", "") for idx in range(len(EXPECTED_CUSTOMER_HEADERS))]
+    if customer_headers != EXPECTED_CUSTOMER_HEADERS:
+        fail(f"Customer BOM header row mismatch: {customer_headers}")
+    if "Discount %" in customer_cells.values() or "Discounted Monthly Cost" in customer_cells.values():
+        fail("Customer BOM should not expose discount columns")
+    if not any(re.fullmatch(r"=SUM\(I\d+:I\d+\)", value) for value in customer_cells.values()):
+        fail("Customer BOM missing monthly list-price total formula")
+    if not any(re.fullmatch(r"=SUM\(J\d+:J\d+\)", value) for value in customer_cells.values()):
+        fail("Customer BOM missing annual list-price total formula")
+    if not any(re.fullmatch(r"=SUM\(K\d+:K\d+\)", value) for value in customer_cells.values()):
+        fail("Customer BOM missing one-time list-price total formula")
+
     workbook_root = read_xml(args.workbook, "xl/workbook.xml")
+    workbook_xml_text = ""
+    with ZipFile(args.workbook) as workbook:
+        workbook_xml_text = workbook.read("xl/workbook.xml").decode("utf-8")
+        rels_xml_text = workbook.read("xl/_rels/workbook.xml.rels").decode("utf-8")
+        content_types_text = workbook.read("[Content_Types].xml").decode("utf-8")
+    if 'name="Customer BOM"' not in workbook_xml_text:
+        fail("Workbook does not register the Customer BOM sheet")
+    if 'Target="worksheets/sheet2.xml"' not in rels_xml_text:
+        fail("Workbook relationships do not include the Customer BOM sheet")
+    if 'PartName="/xl/worksheets/sheet2.xml"' not in content_types_text:
+        fail("Content types do not include the Customer BOM sheet")
+
     calc_pr = workbook_root.find("x:calcPr", NS)
     if calc_pr is None:
         fail("Missing workbook calculation properties")
