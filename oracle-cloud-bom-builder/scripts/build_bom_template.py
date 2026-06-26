@@ -132,10 +132,34 @@ def is_number(value: object) -> bool:
     return True
 
 
-def cell(ref: str, value: object = "", formula: str | None = None, style: int | None = None) -> str:
+def number_or_none(value: object) -> float | None:
+    if not is_number(value):
+        return None
+    return float(value)
+
+
+def cached_value(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.10f}".rstrip("0").rstrip(".")
+
+
+def is_one_time_row(row: BomRow) -> bool:
+    text = normalize_key(f"{row.custom_label} {row.custom_note}")
+    return "one time" in text or "non metered" in text
+
+
+def cell(
+    ref: str,
+    value: object = "",
+    formula: str | None = None,
+    style: int | None = None,
+    formula_value: object = "",
+) -> str:
     style_attr = f' s="{style}"' if style is not None else ""
     if formula is not None:
-        return f'<c r="{ref}"{style_attr}><f>{html.escape(formula)}</f></c>'
+        value_xml = f"<v>{formula_value}</v>" if formula_value != "" else ""
+        return f'<c r="{ref}"{style_attr}><f>{html.escape(formula)}</f>{value_xml}</c>'
     if value == "":
         return f'<c r="{ref}"{style_attr}/>'
     if is_number(value):
@@ -188,6 +212,19 @@ def workbook_styles_xml(template: Path) -> bytes:
         styles = styles.replace("</cellXfs>", f"{currency_xf}</cellXfs>", 1)
 
     return styles.encode("utf-8")
+
+
+def workbook_xml(template: Path) -> bytes:
+    with ZipFile(template, "r") as workbook:
+        workbook_xml_text = workbook.read("xl/workbook.xml").decode("utf-8")
+
+    calc_pr = '<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>'
+    if "<calcPr" in workbook_xml_text:
+        workbook_xml_text = re.sub(r"<calcPr[^>]*/>", calc_pr, workbook_xml_text, count=1)
+    else:
+        workbook_xml_text = workbook_xml_text.replace("</workbook>", f"{calc_pr}</workbook>", 1)
+
+    return workbook_xml_text.encode("utf-8")
 
 
 def load_rows(csv_path: Path | None) -> list[BomRow]:
@@ -313,10 +350,14 @@ def build_sheet(
     currency_style: int,
 ) -> str:
     today = date.today().strftime("%m/%d/%Y")
+    normalized_discount = discount / 100 if discount > 1 else discount
     data_start = 7
     data_end = data_start + len(rows) - 1
     total_row = data_end + 1
     disclaimer_row = total_row + 4
+    monthly_caches: list[float | None] = []
+    discounted_monthly_caches: list[float | None] = []
+    annual_caches: list[float | None] = []
 
     sheet_rows: list[str] = [
         row_xml(1, [f"Oracle Investment Proposal (as of {today})"]),
@@ -347,8 +388,41 @@ def build_sheet(
         row_num = data_start + offset
         monthly_formula = None
         monthly_value = bom.monthly_cost
+        monthly_cache = number_or_none(monthly_value)
         if monthly_value == "" and all(is_number(v) for v in [bom.part_qty, bom.instance_qty, bom.usage_qty, bom.unit_price]):
             monthly_formula = f'IF(OR(C{row_num}="",D{row_num}="",E{row_num}="",F{row_num}=""),"",C{row_num}*D{row_num}*E{row_num}*F{row_num})'
+            monthly_cache = (
+                number_or_none(bom.part_qty)
+                * number_or_none(bom.instance_qty)
+                * number_or_none(bom.usage_qty)
+                * number_or_none(bom.unit_price)
+            )
+        discounted_monthly_cache = (
+            monthly_cache * (1 - normalized_discount) if monthly_cache is not None else None
+        )
+        annual_formula = f'IF(J{row_num}="","",J{row_num}*12)'
+        annual_cache = (
+            discounted_monthly_cache * 12 if discounted_monthly_cache is not None else None
+        )
+        if (
+            monthly_value == ""
+            and monthly_formula is None
+            and is_one_time_row(bom)
+            and all(is_number(v) for v in [bom.part_qty, bom.instance_qty, bom.unit_price])
+        ):
+            annual_formula = (
+                f'IF(OR(C{row_num}="",D{row_num}="",F{row_num}=""),"",'
+                f"C{row_num}*D{row_num}*F{row_num}*(1-{discount_formula()}))"
+            )
+            annual_cache = (
+                number_or_none(bom.part_qty)
+                * number_or_none(bom.instance_qty)
+                * number_or_none(bom.unit_price)
+                * (1 - normalized_discount)
+            )
+        monthly_caches.append(monthly_cache)
+        discounted_monthly_caches.append(discounted_monthly_cache)
+        annual_caches.append(annual_cache)
         cells = [
             cell(f"A{row_num}", bom.part),
             cell(f"B{row_num}", bom.description),
@@ -356,23 +430,27 @@ def build_sheet(
             cell(f"D{row_num}", bom.instance_qty),
             cell(f"E{row_num}", bom.usage_qty),
             cell(f"F{row_num}", bom.unit_price),
-            cell(f"G{row_num}", monthly_value, formula=monthly_formula, style=currency_style),
+            cell(f"G{row_num}", monthly_value, formula=monthly_formula, style=currency_style, formula_value=cached_value(monthly_cache)),
             cell(f"H{row_num}", bom.custom_label),
-            cell(f"I{row_num}", formula=discount_formula(), style=PERCENT_STYLE_ID),
-            cell(f"J{row_num}", formula=f'IF(G{row_num}="","",G{row_num}*(1-{discount_formula()}))', style=currency_style),
-            cell(f"K{row_num}", formula=f'IF(J{row_num}="","",J{row_num}*12)', style=currency_style),
+            cell(f"I{row_num}", formula=discount_formula(), style=PERCENT_STYLE_ID, formula_value=cached_value(normalized_discount)),
+            cell(f"J{row_num}", formula=f'IF(G{row_num}="","",G{row_num}*(1-{discount_formula()}))', style=currency_style, formula_value=cached_value(discounted_monthly_cache)),
+            cell(f"K{row_num}", formula=annual_formula, style=currency_style, formula_value=cached_value(annual_cache)),
             cell(f"L{row_num}", bom.custom_note),
         ]
         sheet_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
+
+    monthly_total_cache = sum(value for value in monthly_caches if value is not None)
+    discounted_monthly_total_cache = sum(value for value in discounted_monthly_caches if value is not None)
+    annual_total_cache = sum(value for value in annual_caches if value is not None)
 
     sheet_rows.extend(
         [
             f'<row r="{total_row}">'
             f'{cell(f"B{total_row}", "Monthly Total")}'
-            f'{cell(f"G{total_row}", formula=f"SUM(G{data_start}:G{data_end})", style=currency_style)}'
-            f'{cell(f"I{total_row}", formula=discount_formula(), style=PERCENT_STYLE_ID)}'
-            f'{cell(f"J{total_row}", formula=f"SUM(J{data_start}:J{data_end})", style=currency_style)}'
-            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})", style=currency_style)}'
+            f'{cell(f"G{total_row}", formula=f"SUM(G{data_start}:G{data_end})", style=currency_style, formula_value=cached_value(monthly_total_cache))}'
+            f'{cell(f"I{total_row}", formula=discount_formula(), style=PERCENT_STYLE_ID, formula_value=cached_value(normalized_discount))}'
+            f'{cell(f"J{total_row}", formula=f"SUM(J{data_start}:J{data_end})", style=currency_style, formula_value=cached_value(discounted_monthly_total_cache))}'
+            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})", style=currency_style, formula_value=cached_value(annual_total_cache))}'
             "</row>",
             row_xml(total_row + 2, ["Quote is for investment proposal only."]),
             row_xml(
@@ -413,6 +491,10 @@ def write_workbook(template: Path, output: Path, sheet_xml: str) -> None:
                 data = sheet_xml.encode("utf-8")
             elif info.filename == "xl/styles.xml":
                 data = workbook_styles_xml(template)
+            elif info.filename == "xl/workbook.xml":
+                data = workbook_xml(template)
+            elif info.filename == "xl/calcChain.xml":
+                continue
             dst.writestr(info, data)
 
 

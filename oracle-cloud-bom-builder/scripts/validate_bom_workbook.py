@@ -50,6 +50,11 @@ def read_sheet(path: Path) -> dict[str, str]:
     return cells
 
 
+def read_xml(path: Path, workbook_part: str) -> ET.Element:
+    with ZipFile(path) as workbook:
+        return ET.fromstring(workbook.read(workbook_part))
+
+
 def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -82,6 +87,26 @@ def main() -> None:
         fail("Missing discounted annual total formula")
     if "Disclaimer:" not in " ".join(cells.values()):
         fail("Missing estimate disclaimer")
+
+    workbook_root = read_xml(args.workbook, "xl/workbook.xml")
+    calc_pr = workbook_root.find("x:calcPr", NS)
+    if calc_pr is None:
+        fail("Missing workbook calculation properties")
+    if calc_pr.attrib.get("calcMode") != "auto":
+        fail("Workbook calculation mode is not automatic")
+    if calc_pr.attrib.get("fullCalcOnLoad") != "1" or calc_pr.attrib.get("forceFullCalc") != "1":
+        fail("Workbook does not force recalculation on open")
+
+    sheet_root = read_xml(args.workbook, "xl/worksheets/sheet1.xml")
+    for ref in ["J" + ref[1:] for ref, value in cells.items() if value.startswith("=SUM(K")]:
+        if ref not in cells:
+            fail(f"Missing discounted monthly total paired with annual total at {ref}")
+    for ref, value in cells.items():
+        if ref.startswith(("J", "K")) and value.startswith("=SUM("):
+            cell = sheet_root.find(f".//x:c[@r='{ref}']", NS)
+            cached_value = cell.find("x:v", NS) if cell is not None else None
+            if cached_value is None or cached_value.text in (None, ""):
+                fail(f"Missing cached formula value for total cell {ref}")
 
     print(f"PASS: {args.workbook}")
 

@@ -48,3 +48,7 @@ Recommended metadata:
 ## Runtime Extraction
 
 Temporary extracted CSVs can be used as script input, but they are not authoritative across runs. Regenerate them from the verified current PDF whenever supplemental pricing is needed.
+
+When a user supplies an explicit SKU, search the verified PDF by exact SKU first. Extract only that row and any adjacent text needed to confirm description, metric, minimum, notes, billing basis, and document date.
+
+Example: `B91390` resolves to `Gen 2 Exadata Cloud at Customer Installation and Activation Service` in the June 11, 2026 cached PDF. It is an `Each` installation and activation service, mandatory per rack, and should be treated as a one-time row when the user asks to include it in annual cost.

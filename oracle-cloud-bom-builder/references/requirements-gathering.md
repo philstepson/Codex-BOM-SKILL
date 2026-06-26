@@ -16,6 +16,7 @@ Ask these when missing:
 - Desired discount percentage. The generated workbook accepts either whole-number entry such as `15` or decimal entry such as `0.15`.
 - License model: BYOL, license included, Universal Credits, or unknown.
 - Whether pricing should be list-price only, discounted estimate, or both.
+- Any explicit add-on SKUs the user wants included, including service, installation, activation, or other non-product price-list rows.
 
 ## Database Services
 
@@ -68,6 +69,9 @@ For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cl
 - Whether local backups are required, because maximum database size differs with and without local backups.
 - License model: License Included or Bring Your Own License.
 - Network option for database servers and control plane servers, if the BOM covers rack or facilities inputs.
+- Whether installation and activation should be included as a one-time annual-cost row, such as `B91390`.
+
+For a Cloud@Customer X11M Base rack request, use the Base System Rack row when pricing is available. Keep separately requested storage-server type and quantity explicit. A Base rack with High Capacity storage servers should show the Base rack SKU and the High Capacity storage SKU as separate rows rather than hiding the storage selection in the rack row.
 
 For Autonomous Database, also ask:
 
@@ -163,5 +167,14 @@ When the user cannot answer a required pricing parameter:
 - Preserve formulas where possible so values calculate after the missing inputs are entered.
 
 Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data, authenticated Oracle pricing calculator output, or current Oracle pricing sources only when explicitly requested and verified.
+
+When the user supplies an explicit SKU to add to a BOM:
+
+- Ask for the intended quantity if the user did not provide one and the row is not obviously a single add-on service.
+- Search the verified current Oracle eSource price-list PDF by exact SKU first when the SKU is not already present in calculator or estimator rows.
+- Use description matching only after exact SKU lookup fails, and ask the user before substituting a similar row.
+- Preserve the price-list billing basis in `Custom Note`, especially for one-time, non-metered, installation, or activation service SKUs.
+- Add the source document date to the row note when the price came from the eSource PDF or date-verified PDF cache.
+- If the SKU is one-time and should be included in the annual estimate, leave recurring monthly cost blank and calculate the discounted annual cost once from quantity and unit price.
 
 Before asking the user to authenticate to eSource, determine whether Oracle Cost Estimator or the Oracle pricing calculator can cover the requested rows. Use the calculator first for nearly all non-Cloud@Customer BOMs. For Exadata Cloud@Customer and other resources that Oracle Cost Estimator or the Oracle pricing calculator does not fully cover, use the user's current authenticated Oracle eSource PDF as a supplemental fallback pricing source when available. A local PDF cache may be used only after checking the current eSource document date. Replace the cached PDF if eSource has a newer document date, then extract only the relevant runtime rows, capture the document date from the PDF front page, and add a BOM note for any row priced from that PDF. Do not treat previously extracted pricing tables as authoritative across runs.

@@ -1,0 +1,5 @@
+Part,Description,Part Qty,Instance Qty,Usage Qty,Unit Price,Monthly Cost,Custom Label,Custom Note
+,"OCI Exadata Dedicated Infrastructure X11M - Quarter rack baseline, 64 BYOL ECPUs, 3 storage servers",,,,,,,"Calculator source: Oracle Cloud Cost Estimator export generated 06/25/2026. Assumes latest X11M, default 2 database servers, default 3 storage servers, 64 BYOL ECPUs, and 744 hours per month."
+B110629,Exadata Cloud Infrastructure - Storage Server - X11M (Hosted Environment Per Hour),3,1,744,2.9032,6479.9424,,"Calculator row preserved for OCI Exadata Dedicated Infrastructure X11M. Default 3 storage servers."
+B110627,Exadata Cloud Infrastructure - Database Server - X11M (Hosted Environment Per Hour),2,1,744,2.9032,4319.9616,,"Calculator row preserved for OCI Exadata Dedicated Infrastructure X11M. Default 2 database servers."
+B110632,Exadata Database ECPU - Dedicated Infrastructure - BYOL (ECPU Per Hour),64,1,744,0.0807,3842.6112,BYOL,"Calculator row preserved for OCI Exadata Dedicated Infrastructure X11M. 64 BYOL ECPUs."

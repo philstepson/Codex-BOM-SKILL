@@ -50,6 +50,7 @@ Recommended behavior:
 - `Discounted Annual Cost` should equal discounted monthly cost multiplied by `12`.
 - Total rows should sum list monthly cost, discounted monthly cost, and discounted annual cost.
 - Keep `Custom Note` as the rightmost table column so long source notes do not interrupt the numeric estimate columns.
+- Generated formula cells should include cached values for the default discount, and `xl/workbook.xml` should force automatic recalculation on open with `calcMode="auto"`, `fullCalcOnLoad="1"`, and `forceFullCalc="1"`.
 
 ## Supplemental Pricing From Current PDF Sources
 
@@ -58,6 +59,10 @@ Use Oracle Cost Estimator or Oracle pricing calculator output as the primary sou
 Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The default calculator configuration is a quarter rack with 2 database servers and 3 storage servers unless the user or calculator configuration says otherwise.
 
 When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback. Ask the user to authenticate to eSource only after the calculator path is unavailable or incomplete, or when the request is Exadata Cloud@Customer.
+
+When the user explicitly asks to add a SKU, treat that SKU as an intentional workbook row even if it is not a normal calculator-generated product row. Search the verified current eSource price-list PDF by exact SKU before attempting description matching. Use the exact price-list description and price fields for the row, and include the billing basis and document date in `Custom Note`. For example, `B91390` may be requested as `Gen 2 Exadata Cloud at Customer Installation and Activation Service`; if that SKU is not present in the calculator output, it should be resolved from the current or date-verified cached price-list PDF rather than inferred from the service description.
+
+For one-time or non-metered service SKUs, keep the billing basis visible in `Custom Note`. If the user wants the service included in the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank and calculate `Discounted Annual Cost` once from quantity and unit price. This is the current behavior for `B91390` in the Standard C@C output.
 
 Do not add persistent source-tracking columns for the supplemental PDF by default. Instead, keep the Oracle estimator columns unchanged and append a concise footnote to `Custom Note` for any row filled from the PDF. The note must identify Oracle eSource PDF pricing and include the document date from the PDF front page.
 
@@ -74,6 +79,13 @@ The bundled sample BOM should model an Exadata Database Service on Cloud@Custome
 - License model marked as TBD when the user has not chosen License Included or Bring Your Own License.
 
 Leave SKU and price fields blank when current pricing has not been supplied or extracted from an approved source. The sample should preserve editable Oracle estimator fields and use `Custom Note` to make the rack, redundancy, and licensing assumptions visible.
+
+## Current Generated BOM Patterns
+
+The repo currently contains two generated BOM patterns:
+
+- `outputs/StandardC@C.xlsx`: Cloud@Customer X11M Base rack output generated from `tmp/StandardC@C-b91390.csv`. It includes `B110634` Base System Rack, `B110647` High Capacity storage servers, `B110663` BYOL ECPU runtime, and `B91390` one-time installation and activation. The installation row is excluded from recurring monthly totals and included once in discounted annual cost.
+- `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M output generated from `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`. It preserves calculator-backed rows for 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
 
 ## Default Sheet Design
 
@@ -110,6 +122,22 @@ Example formulas:
 If calculating list monthly cost from quantities:
 
 `=IF(OR(C7="",D7="",E7="",F7=""),"",C7*D7*E7*F7)`
+
+For one-time service SKUs that should be added to the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank and calculate `Discounted Annual Cost` once from quantity and unit price:
+
+`=IF(OR(C7="",D7="",F7=""),"",C7*D7*F7*(1-IF($K$3>1,$K$3/100,$K$3)))`
+
+## Calculation Cache
+
+The workbook builder should write cached values into formula cells for row-level discounted monthly cost, row-level discounted annual cost, monthly total, discounted monthly total, and discounted annual total. These cached values are based on the initial discount supplied to the builder.
+
+The workbook should also force recalculation on open. In `xl/workbook.xml`, `calcPr` should be:
+
+```xml
+<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>
+```
+
+Do not include a stale `xl/calcChain.xml` from the template after replacing worksheet formulas.
 
 ## Formatting Guidance
 
