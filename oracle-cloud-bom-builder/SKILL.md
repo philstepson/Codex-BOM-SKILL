@@ -38,7 +38,7 @@ Use `assets/oracle-cost-estimator-sample.xlsx` as a format reference when a user
 
 When the user asks for the preferred classic Excel BOM format, a customer proposal workbook, or a multi-environment BOM, read `references/classic-excel-bom-layout.md`. Treat the classic sample workbook as a tested layout reference only; do not use its embedded price lists as current pricing.
 
-For proposal-style workbooks, include a customer-facing BOM view that shows environment, all SKUs, descriptions, quantities, metrics or billing basis, and list prices. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic only in internal working sheets if needed.
+For proposal-style workbooks, include a customer-facing BOM view that shows one row per unique SKU or priced line item, environment-specific column blocks for quantities/hours/list prices, summary rows for each environment, and final all-environment totals. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic only in internal working sheets if needed.
 
 As a future enhancement for configured systems, the skill may create an optional system summary that describes requested, configured, and available processor, memory, and storage resources using the relevant datasheet reference plus BOM inputs. A simple Draw.io-compatible block diagram may also be produced when requested, but it is not required for normal BOM generation.
 

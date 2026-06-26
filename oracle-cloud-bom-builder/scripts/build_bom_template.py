@@ -172,6 +172,18 @@ def row_one_time_cost(row: BomRow) -> float | None:
     return None
 
 
+def row_customer_quantity(row: BomRow) -> float | str:
+    part_qty = number_or_none(row.part_qty)
+    instance_qty = number_or_none(row.instance_qty)
+    if part_qty is not None and instance_qty is not None:
+        return part_qty * instance_qty
+    return row.part_qty
+
+
+def safe_sheet_text(value: object) -> str:
+    return str(value).replace('"', '""')
+
+
 def cell(
     ref: str,
     value: object = "",
@@ -506,95 +518,214 @@ def build_customer_sheet(
     currency_style: int,
 ) -> str:
     today = date.today().strftime("%m/%d/%Y")
+    customer_rows = [row for row in rows if row.part]
+    environments: list[str] = []
+    for row in customer_rows:
+        environment = row.environment or "General"
+        if environment not in environments:
+            environments.append(environment)
+    if not environments:
+        environments = ["General"]
+
+    def billing_basis(row: BomRow) -> str:
+        if row_one_time_cost(row) is not None and row_monthly_cost(row)[2] is None:
+            return "One-time"
+        if row_monthly_cost(row)[2] is not None or row_monthly_cost(row)[1] is not None:
+            return "Recurring usage"
+        return ""
+
+    grouped: dict[tuple[str, str, str, str], dict[str, BomRow]] = {}
+    notes: dict[tuple[str, str, str, str], list[str]] = {}
+    order: list[tuple[str, str, str, str]] = []
+    for row in customer_rows:
+        key = (row.part, row.description, str(row.unit_price), billing_basis(row))
+        if key not in grouped:
+            grouped[key] = {}
+            notes[key] = []
+            order.append(key)
+        grouped[key][row.environment or "General"] = row
+        if row.custom_note and row.custom_note not in notes[key]:
+            notes[key].append(row.custom_note)
+
     data_start = 7
-    data_end = data_start + len(rows) - 1
+    data_end = data_start + len(order) - 1
     total_row = data_end + 1
     disclaimer_row = total_row + 4
-    monthly_caches: list[float | None] = []
-    annual_caches: list[float | None] = []
-    one_time_caches: list[float | None] = []
+    total_col_start = 5 + (len(environments) * 5)
+    note_col = total_col_start + 4
+    last_col = note_col
 
     sheet_rows: list[str] = [
         row_xml(1, [f"Customer BOM (as of {today})"]),
         row_xml(2, [f"Reference label: {reference_label}"]),
         row_xml(3, [f"Currency: {currency}"]),
         row_xml(4, [f"Realm: {realm}"]),
-        row_xml(5, ["List-price customer view. Discount calculations are intentionally omitted."]),
-        row_xml(
-            6,
-            [
-                "Environment",
-                "Part",
-                "Description",
-                "Part Qty",
-                "Instance Qty",
-                "Usage Qty",
-                "Billing Basis",
-                "Unit List Price",
-                "Monthly List Price",
-                "Annual List Price",
-                "One-Time List Price",
-                "Customer Note",
-            ],
-        ),
+        row_xml(5, ["List-price customer view by environment. Discount calculations are intentionally omitted."]),
     ]
 
-    for offset, bom in enumerate(rows):
-        row_num = data_start + offset
-        monthly_value, monthly_formula_template, monthly_cache = row_monthly_cost(bom)
-        one_time_cache = row_one_time_cost(bom)
-        is_one_time = one_time_cache is not None and monthly_cache is None
-
-        monthly_formula = None
-        annual_formula = None
-        one_time_formula = None
-        annual_cache = monthly_cache * 12 if monthly_cache is not None else None
-
-        if monthly_formula_template is not None:
-            monthly_formula = f'IF(OR(D{row_num}="",E{row_num}="",F{row_num}="",H{row_num}=""),"",D{row_num}*E{row_num}*F{row_num}*H{row_num})'
-        if monthly_cache is not None:
-            annual_formula = f'IF(I{row_num}="","",I{row_num}*12)'
-        if is_one_time:
-            one_time_formula = f'IF(OR(D{row_num}="",E{row_num}="",H{row_num}=""),"",D{row_num}*E{row_num}*H{row_num})'
-        else:
-            one_time_cache = None
-
-        monthly_caches.append(monthly_cache)
-        annual_caches.append(annual_cache)
-        one_time_caches.append(one_time_cache)
-
-        billing_basis = "One-time" if is_one_time else ("Recurring usage" if monthly_cache is not None else "")
-        environment = bom.environment or "General"
-        note = bom.custom_note
-        cells = [
-            cell(f"A{row_num}", environment),
-            cell(f"B{row_num}", bom.part),
-            cell(f"C{row_num}", bom.description),
-            cell(f"D{row_num}", bom.part_qty),
-            cell(f"E{row_num}", bom.instance_qty),
-            cell(f"F{row_num}", bom.usage_qty),
-            cell(f"G{row_num}", billing_basis),
-            cell(f"H{row_num}", bom.unit_price),
-            cell(f"I{row_num}", monthly_value, formula=monthly_formula, style=currency_style, formula_value=cached_value(monthly_cache)),
-            cell(f"J{row_num}", formula=annual_formula, style=currency_style, formula_value=cached_value(annual_cache)),
-            cell(f"K{row_num}", formula=one_time_formula, style=currency_style, formula_value=cached_value(one_time_cache)),
-            cell(f"L{row_num}", note),
+    top_header_cells = [
+        cell("A6", "Part"),
+        cell("B6", "Description"),
+        cell("C6", "Billing Basis"),
+        cell("D6", "Unit List Price"),
+    ]
+    for env_index, environment in enumerate(environments):
+        start_col = 5 + (env_index * 5)
+        top_header_cells.extend(
+            [
+                cell(f"{column_name(start_col)}6", f"{environment} Qty"),
+                cell(f"{column_name(start_col + 1)}6", f"{environment} Hrs"),
+                cell(f"{column_name(start_col + 2)}6", f"{environment} Monthly List"),
+                cell(f"{column_name(start_col + 3)}6", f"{environment} Annual List"),
+                cell(f"{column_name(start_col + 4)}6", f"{environment} One-Time List"),
+            ]
+        )
+    top_header_cells.extend(
+        [
+            cell(f"{column_name(total_col_start)}6", "Total Qty"),
+            cell(f"{column_name(total_col_start + 1)}6", "Total Monthly List"),
+            cell(f"{column_name(total_col_start + 2)}6", "Total Annual List"),
+            cell(f"{column_name(total_col_start + 3)}6", "Total One-Time List"),
+            cell(f"{column_name(note_col)}6", "Customer Note"),
         ]
+    )
+    sheet_rows.append(f'<row r="6">{"".join(top_header_cells)}</row>')
+
+    for offset, key in enumerate(order):
+        row_num = data_start + offset
+        part, description, unit_price, basis = key
+        cells = [
+            cell(f"A{row_num}", part),
+            cell(f"B{row_num}", description),
+            cell(f"C{row_num}", basis),
+            cell(f"D{row_num}", unit_price),
+        ]
+        qty_cols: list[str] = []
+        monthly_cols: list[str] = []
+        annual_cols: list[str] = []
+        one_time_cols: list[str] = []
+        qty_total = 0.0
+        monthly_total = 0.0
+        annual_total = 0.0
+        one_time_total = 0.0
+
+        for env_index, environment in enumerate(environments):
+            env_row = grouped[key].get(environment)
+            start_col = 5 + (env_index * 5)
+            qty_col = column_name(start_col)
+            hrs_col = column_name(start_col + 1)
+            monthly_col = column_name(start_col + 2)
+            annual_col = column_name(start_col + 3)
+            one_time_col = column_name(start_col + 4)
+            qty_cols.append(qty_col)
+            monthly_cols.append(monthly_col)
+            annual_cols.append(annual_col)
+            one_time_cols.append(one_time_col)
+
+            if env_row is None:
+                cells.extend(
+                    [
+                        cell(f"{qty_col}{row_num}", ""),
+                        cell(f"{hrs_col}{row_num}", ""),
+                        cell(f"{monthly_col}{row_num}", "", style=currency_style),
+                        cell(f"{annual_col}{row_num}", "", style=currency_style),
+                        cell(f"{one_time_col}{row_num}", "", style=currency_style),
+                    ]
+                )
+                continue
+
+            quantity = row_customer_quantity(env_row)
+            qty_num = number_or_none(quantity)
+            if qty_num is not None:
+                qty_total += qty_num
+            monthly_value, monthly_formula_template, monthly_cache = row_monthly_cost(env_row)
+            one_time_cache = row_one_time_cost(env_row)
+            is_one_time = one_time_cache is not None and monthly_cache is None
+            monthly_formula = None
+            if monthly_formula_template is not None:
+                monthly_formula = (
+                    f'IF(OR({qty_col}{row_num}="",{hrs_col}{row_num}="",$D{row_num}=""),"",'
+                    f"{qty_col}{row_num}*{hrs_col}{row_num}*$D{row_num})"
+                )
+            annual_formula = f'IF({monthly_col}{row_num}="","",{monthly_col}{row_num}*12)' if monthly_cache is not None or monthly_formula is not None else None
+            annual_cache = monthly_cache * 12 if monthly_cache is not None else None
+            one_time_formula = None
+            if is_one_time:
+                one_time_formula = f'IF(OR({qty_col}{row_num}="",$D{row_num}=""),"",{qty_col}{row_num}*$D{row_num})'
+            else:
+                one_time_cache = None
+
+            monthly_total += monthly_cache or 0.0
+            annual_total += annual_cache or 0.0
+            one_time_total += one_time_cache or 0.0
+            cells.extend(
+                [
+                    cell(f"{qty_col}{row_num}", quantity),
+                    cell(f"{hrs_col}{row_num}", env_row.usage_qty),
+                    cell(f"{monthly_col}{row_num}", monthly_value, formula=monthly_formula, style=currency_style, formula_value=cached_value(monthly_cache)),
+                    cell(f"{annual_col}{row_num}", formula=annual_formula, style=currency_style, formula_value=cached_value(annual_cache)),
+                    cell(f"{one_time_col}{row_num}", formula=one_time_formula, style=currency_style, formula_value=cached_value(one_time_cache)),
+                ]
+            )
+
+        cells.extend(
+            [
+                cell(
+                    f"{column_name(total_col_start)}{row_num}",
+                    formula="+".join(f"{col}{row_num}" for col in qty_cols),
+                    formula_value=cached_value(qty_total),
+                ),
+                cell(
+                    f"{column_name(total_col_start + 1)}{row_num}",
+                    formula="+".join(f"{col}{row_num}" for col in monthly_cols),
+                    style=currency_style,
+                    formula_value=cached_value(monthly_total),
+                ),
+                cell(
+                    f"{column_name(total_col_start + 2)}{row_num}",
+                    formula="+".join(f"{col}{row_num}" for col in annual_cols),
+                    style=currency_style,
+                    formula_value=cached_value(annual_total),
+                ),
+                cell(
+                    f"{column_name(total_col_start + 3)}{row_num}",
+                    formula="+".join(f"{col}{row_num}" for col in one_time_cols),
+                    style=currency_style,
+                    formula_value=cached_value(one_time_total),
+                ),
+                cell(f"{column_name(note_col)}{row_num}", " | ".join(notes[key])),
+            ]
+        )
         sheet_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
 
-    monthly_total_cache = sum(value for value in monthly_caches if value is not None)
-    annual_total_cache = sum(value for value in annual_caches if value is not None)
-    one_time_total_cache = sum(value for value in one_time_caches if value is not None)
+    summary_rows: list[str] = []
+    for env_index, environment in enumerate(environments):
+        row_num = total_row + env_index
+        start_col = 5 + (env_index * 5)
+        monthly_col = column_name(start_col + 2)
+        annual_col = column_name(start_col + 3)
+        one_time_col = column_name(start_col + 4)
+        summary_rows.append(
+            f'<row r="{row_num}">'
+            f'{cell(f"B{row_num}", f"{environment} Total")}'
+            f'{cell(f"{monthly_col}{row_num}", formula=f"SUM({monthly_col}{data_start}:{monthly_col}{data_end})", style=currency_style)}'
+            f'{cell(f"{annual_col}{row_num}", formula=f"SUM({annual_col}{data_start}:{annual_col}{data_end})", style=currency_style)}'
+            f'{cell(f"{one_time_col}{row_num}", formula=f"SUM({one_time_col}{data_start}:{one_time_col}{data_end})", style=currency_style)}'
+            "</row>"
+        )
+    grand_total_row = total_row + len(environments) + 1
+    disclaimer_row = grand_total_row + 4
 
     sheet_rows.extend(
-        [
-            f'<row r="{total_row}">'
-            f'{cell(f"C{total_row}", "Customer BOM Total")}'
-            f'{cell(f"I{total_row}", formula=f"SUM(I{data_start}:I{data_end})", style=currency_style, formula_value=cached_value(monthly_total_cache))}'
-            f'{cell(f"J{total_row}", formula=f"SUM(J{data_start}:J{data_end})", style=currency_style, formula_value=cached_value(annual_total_cache))}'
-            f'{cell(f"K{total_row}", formula=f"SUM(K{data_start}:K{data_end})", style=currency_style, formula_value=cached_value(one_time_total_cache))}'
+        summary_rows
+        + [
+            f'<row r="{grand_total_row}">'
+            f'{cell(f"B{grand_total_row}", "All Environments Total")}'
+            f'{cell(f"{column_name(total_col_start + 1)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=currency_style)}'
+            f'{cell(f"{column_name(total_col_start + 2)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 2)}{data_start}:{column_name(total_col_start + 2)}{data_end})", style=currency_style)}'
+            f'{cell(f"{column_name(total_col_start + 3)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 3)}{data_start}:{column_name(total_col_start + 3)}{data_end})", style=currency_style)}'
             "</row>",
-            row_xml(total_row + 2, ["Customer-facing view shows list prices only."]),
+            row_xml(grand_total_row + 2, ["Customer-facing view shows list prices only."]),
             row_xml(
                 disclaimer_row,
                 [
@@ -605,11 +736,10 @@ def build_customer_sheet(
         ]
     )
 
-    cols = "".join(
-        f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>'
-        for idx, width in enumerate([18, 16, 72, 12, 14, 12, 18, 16, 18, 18, 18, 34], start=1)
-    )
+    widths = [16, 72, 18, 16] + ([12, 12, 18, 18, 18] * len(environments)) + [12, 20, 20, 20, 42]
+    cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
     dimension = f"A1:L{disclaimer_row}"
+    dimension = f"A1:{column_name(last_col)}{disclaimer_row}"
     sheet_data = "".join(sheet_rows)
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -619,7 +749,7 @@ def build_customer_sheet(
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>{cols}</cols>
   <sheetData>{sheet_data}</sheetData>
-  <autoFilter ref="A6:L{total_row}"/>
+  <autoFilter ref="A6:{column_name(last_col)}{data_end}"/>
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 </worksheet>'''
 

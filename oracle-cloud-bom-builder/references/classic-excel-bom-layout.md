@@ -92,23 +92,28 @@ The main SKU entry area starts with columns similar to:
 - Total.
 - Include/category flags.
 
+The preferred multi-environment pattern is one row per unique SKU or priced line item, not one repeated row per environment. Each environment gets its own adjacent column block. When a SKU is not relevant to an environment, that environment's cells stay blank. The sample pattern uses blocks like:
+
+- `Prod Qty`, `Prod Hrs`, `Prod List Price`, `Prod Discounted Price`.
+- `Non-Prod Qty`, `Non-Prod Hrs`, `Non-Prod List Price`, `Non-Prod Discounted Price`.
+- `DR Qty`, `DR Hrs`, `DR List Price`, `DR Discounted Price`.
+- Final total columns for all environments.
+
+Below the SKU rows, the workbook should include summary rows for each unique environment and a final all-environments total. This is the ideal customer-review format because it lets the reader scan each SKU once and see exactly which environments consume it.
+
 ## Required Customer-Facing BOM View
 
 For proposal use, always provide or be able to generate a customer-facing BOM sheet. This view should be simple, visible, and safe to share with a customer.
 
 The customer-facing BOM should show:
 
-- Environment.
 - SKU or part number.
 - Oracle product or service description.
 - Metric or billing basis.
-- Quantity.
-- Usage quantity or hours when relevant.
 - Unit list price.
-- Extended list price.
-- Monthly list price for recurring rows when relevant.
-- Annual list price for recurring rows.
-- One-time list price for one-time service rows when relevant.
+- One column block for each environment, with quantity, usage quantity or hours, monthly list price, annual list price, and one-time list price.
+- Final total columns for all environments.
+- Summary rows for each environment and one final all-environments total.
 - Optional notes that are appropriate for customer review.
 
 The customer-facing BOM should hide or omit:
@@ -118,7 +123,7 @@ The customer-facing BOM should hide or omit:
 - Source extraction scratch data.
 - Complex helper columns used only to populate formulas.
 
-When the user asks for a customer version that shows only list price, include all SKUs and quantities and do not show discounted totals. Keep discounts in the internal/proposal working view only unless the user explicitly asks to expose them.
+When the user asks for a customer version that shows only list price, include all SKUs and quantities in the wide environment-block format and do not show discounted totals. Keep discounts in the internal/proposal working view only unless the user explicitly asks to expose them.
 
 ## Future Configured-System Summary
 

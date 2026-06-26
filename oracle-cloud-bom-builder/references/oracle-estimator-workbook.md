@@ -91,7 +91,7 @@ The repo currently contains two generated BOM patterns:
 - `outputs/StandardC@C.xlsx`: Cloud@Customer X11M Base rack output generated from `tmp/StandardC@C-b91390.csv`. It includes `B110634` Base System Rack, `B110647` High Capacity storage servers, `B110663` BYOL ECPU runtime, and `B91390` one-time installation and activation. The installation row is excluded from recurring monthly totals and included once in discounted annual cost.
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M output generated from `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`. It preserves calculator-backed rows for 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
 
-Generated workbooks should include a visible `Customer BOM` sheet with list-price-only columns for environment, SKU, description, quantity, billing basis, unit list price, monthly list price, annual list price, one-time list price, and customer-safe notes.
+Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use environment-specific column blocks for quantity, hours, monthly list price, annual list price, and one-time list price; blank cells show when a SKU does not apply to an environment. It should also include per-environment summary rows and final all-environment total columns.
 
 ## Default Sheet Design
 
