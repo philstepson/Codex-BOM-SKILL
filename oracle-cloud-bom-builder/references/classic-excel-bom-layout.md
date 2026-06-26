@@ -99,7 +99,7 @@ The preferred multi-environment pattern is one row per unique SKU or priced line
 - `DR Qty`, `DR Hrs`, `DR List Price`, `DR Discounted Price`.
 - Final total columns for all environments.
 
-Below the SKU rows, the workbook should include summary rows for each unique environment and a final all-environments total. This is the ideal customer-review format because it lets the reader scan each SKU once and see exactly which environments consume it.
+The workbook should also include an environment summary block and a final all-environments total. This is the ideal customer-review format because it lets the reader scan each SKU once, see exactly which environments consume it, and understand the total cost of each environment independently.
 
 ## Required Customer-Facing BOM View
 
@@ -113,8 +113,7 @@ The customer-facing BOM should show:
 - Unit list price.
 - One column block for each environment, with quantity, usage quantity or hours, monthly list price, annual list price, and one-time list price.
 - Final total columns for all environments.
-- Summary rows for each environment and one final all-environments total.
-- Optional notes that are appropriate for customer review.
+- A visible summary block for each environment and one final all-environments total.
 
 The customer-facing BOM should hide or omit:
 
@@ -122,6 +121,7 @@ The customer-facing BOM should hide or omit:
 - Internal price-list tabs.
 - Source extraction scratch data.
 - Complex helper columns used only to populate formulas.
+- Verbose source notes or audit comments.
 
 When the user asks for a customer version that shows only list price, include all SKUs and quantities in the wide environment-block format and do not show discounted totals. Keep discounts in the internal/proposal working view only unless the user explicitly asks to expose them.
 

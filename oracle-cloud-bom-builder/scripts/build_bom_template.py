@@ -535,62 +535,69 @@ def build_customer_sheet(
         return ""
 
     grouped: dict[tuple[str, str, str, str], dict[str, BomRow]] = {}
-    notes: dict[tuple[str, str, str, str], list[str]] = {}
     order: list[tuple[str, str, str, str]] = []
     for row in customer_rows:
         key = (row.part, row.description, str(row.unit_price), billing_basis(row))
         if key not in grouped:
             grouped[key] = {}
-            notes[key] = []
             order.append(key)
         grouped[key][row.environment or "General"] = row
-        if row.custom_note and row.custom_note not in notes[key]:
-            notes[key].append(row.custom_note)
 
-    data_start = 7
+    summary_header_row = 5
+    summary_start = 6
+    summary_end = summary_start + len(environments) - 1
+    all_summary_row = summary_end + 1
+    group_header_row = all_summary_row + 2
+    table_header_row = group_header_row + 1
+    data_start = table_header_row + 1
     data_end = data_start + len(order) - 1
-    total_row = data_end + 1
-    disclaimer_row = total_row + 4
     total_col_start = 5 + (len(environments) * 5)
-    note_col = total_col_start + 4
-    last_col = note_col
+    last_col = total_col_start + 3
+    disclaimer_row = data_end + 4
 
-    sheet_rows: list[str] = [
-        row_xml(1, [f"Customer BOM (as of {today})"]),
-        row_xml(2, [f"Reference label: {reference_label}"]),
-        row_xml(3, [f"Currency: {currency}"]),
-        row_xml(4, [f"Realm: {realm}"]),
-        row_xml(5, ["List-price customer view by environment. Discount calculations are intentionally omitted."]),
+    env_totals = {
+        environment: {"monthly": 0.0, "annual": 0.0, "one_time": 0.0}
+        for environment in environments
+    }
+    all_totals = {"monthly": 0.0, "annual": 0.0, "one_time": 0.0}
+
+    group_cells = [
+        cell(f"A{group_header_row}", "SKU Detail"),
+        cell(f"B{group_header_row}", ""),
+        cell(f"C{group_header_row}", ""),
+        cell(f"D{group_header_row}", ""),
     ]
-
-    top_header_cells = [
-        cell("A6", "Part"),
-        cell("B6", "Description"),
-        cell("C6", "Billing Basis"),
-        cell("D6", "Unit List Price"),
+    header_cells = [
+        cell(f"A{table_header_row}", "Part"),
+        cell(f"B{table_header_row}", "Description"),
+        cell(f"C{table_header_row}", "Billing Basis"),
+        cell(f"D{table_header_row}", "Unit List Price"),
     ]
     for env_index, environment in enumerate(environments):
         start_col = 5 + (env_index * 5)
-        top_header_cells.extend(
+        group_cells.append(cell(f"{column_name(start_col)}{group_header_row}", environment))
+        group_cells.extend(cell(f"{column_name(start_col + offset)}{group_header_row}", "") for offset in range(1, 5))
+        header_cells.extend(
             [
-                cell(f"{column_name(start_col)}6", f"{environment} Qty"),
-                cell(f"{column_name(start_col + 1)}6", f"{environment} Hrs"),
-                cell(f"{column_name(start_col + 2)}6", f"{environment} Monthly List"),
-                cell(f"{column_name(start_col + 3)}6", f"{environment} Annual List"),
-                cell(f"{column_name(start_col + 4)}6", f"{environment} One-Time List"),
+                cell(f"{column_name(start_col)}{table_header_row}", "Qty"),
+                cell(f"{column_name(start_col + 1)}{table_header_row}", "Hrs"),
+                cell(f"{column_name(start_col + 2)}{table_header_row}", "Monthly List"),
+                cell(f"{column_name(start_col + 3)}{table_header_row}", "Annual List"),
+                cell(f"{column_name(start_col + 4)}{table_header_row}", "One-Time List"),
             ]
         )
-    top_header_cells.extend(
+    group_cells.append(cell(f"{column_name(total_col_start)}{group_header_row}", "All Environments"))
+    group_cells.extend(cell(f"{column_name(total_col_start + offset)}{group_header_row}", "") for offset in range(1, 4))
+    header_cells.extend(
         [
-            cell(f"{column_name(total_col_start)}6", "Total Qty"),
-            cell(f"{column_name(total_col_start + 1)}6", "Total Monthly List"),
-            cell(f"{column_name(total_col_start + 2)}6", "Total Annual List"),
-            cell(f"{column_name(total_col_start + 3)}6", "Total One-Time List"),
-            cell(f"{column_name(note_col)}6", "Customer Note"),
+            cell(f"{column_name(total_col_start)}{table_header_row}", "Total Qty"),
+            cell(f"{column_name(total_col_start + 1)}{table_header_row}", "Total Monthly List"),
+            cell(f"{column_name(total_col_start + 2)}{table_header_row}", "Total Annual List"),
+            cell(f"{column_name(total_col_start + 3)}{table_header_row}", "Total One-Time List"),
         ]
     )
-    sheet_rows.append(f'<row r="6">{"".join(top_header_cells)}</row>')
 
+    data_rows: list[str] = []
     for offset, key in enumerate(order):
         row_num = data_start + offset
         part, description, unit_price, basis = key
@@ -658,6 +665,9 @@ def build_customer_sheet(
             monthly_total += monthly_cache or 0.0
             annual_total += annual_cache or 0.0
             one_time_total += one_time_cache or 0.0
+            env_totals[environment]["monthly"] += monthly_cache or 0.0
+            env_totals[environment]["annual"] += annual_cache or 0.0
+            env_totals[environment]["one_time"] += one_time_cache or 0.0
             cells.extend(
                 [
                     cell(f"{qty_col}{row_num}", quantity),
@@ -693,63 +703,83 @@ def build_customer_sheet(
                     style=currency_style,
                     formula_value=cached_value(one_time_total),
                 ),
-                cell(f"{column_name(note_col)}{row_num}", " | ".join(notes[key])),
             ]
         )
-        sheet_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
+        all_totals["monthly"] += monthly_total
+        all_totals["annual"] += annual_total
+        all_totals["one_time"] += one_time_total
+        data_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
 
-    summary_rows: list[str] = []
+    top_summary_rows: list[str] = [
+        f'<row r="{summary_header_row}">'
+        f'{cell(f"A{summary_header_row}", "Environment Summary")}'
+        f'{cell(f"B{summary_header_row}", "Monthly List")}'
+        f'{cell(f"C{summary_header_row}", "Annual List")}'
+        f'{cell(f"D{summary_header_row}", "One-Time List")}'
+        "</row>"
+    ]
     for env_index, environment in enumerate(environments):
-        row_num = total_row + env_index
+        row_num = summary_start + env_index
         start_col = 5 + (env_index * 5)
         monthly_col = column_name(start_col + 2)
         annual_col = column_name(start_col + 3)
         one_time_col = column_name(start_col + 4)
-        summary_rows.append(
+        top_summary_rows.append(
             f'<row r="{row_num}">'
-            f'{cell(f"B{row_num}", f"{environment} Total")}'
-            f'{cell(f"{monthly_col}{row_num}", formula=f"SUM({monthly_col}{data_start}:{monthly_col}{data_end})", style=currency_style)}'
-            f'{cell(f"{annual_col}{row_num}", formula=f"SUM({annual_col}{data_start}:{annual_col}{data_end})", style=currency_style)}'
-            f'{cell(f"{one_time_col}{row_num}", formula=f"SUM({one_time_col}{data_start}:{one_time_col}{data_end})", style=currency_style)}'
+            f'{cell(f"A{row_num}", environment)}'
+            f'{cell(f"B{row_num}", formula=f"SUM({monthly_col}{data_start}:{monthly_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["monthly"]))}'
+            f'{cell(f"C{row_num}", formula=f"SUM({annual_col}{data_start}:{annual_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["annual"]))}'
+            f'{cell(f"D{row_num}", formula=f"SUM({one_time_col}{data_start}:{one_time_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["one_time"]))}'
             "</row>"
         )
-    grand_total_row = total_row + len(environments) + 1
-    disclaimer_row = grand_total_row + 4
-
-    sheet_rows.extend(
-        summary_rows
-        + [
-            f'<row r="{grand_total_row}">'
-            f'{cell(f"B{grand_total_row}", "All Environments Total")}'
-            f'{cell(f"{column_name(total_col_start + 1)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=currency_style)}'
-            f'{cell(f"{column_name(total_col_start + 2)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 2)}{data_start}:{column_name(total_col_start + 2)}{data_end})", style=currency_style)}'
-            f'{cell(f"{column_name(total_col_start + 3)}{grand_total_row}", formula=f"SUM({column_name(total_col_start + 3)}{data_start}:{column_name(total_col_start + 3)}{data_end})", style=currency_style)}'
-            "</row>",
-            row_xml(grand_total_row + 2, ["Customer-facing view shows list prices only."]),
-            row_xml(
-                disclaimer_row,
-                [
-                    "Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. "
-                    "It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."
-                ],
-            ),
-        ]
+    top_summary_rows.append(
+        f'<row r="{all_summary_row}">'
+        f'{cell(f"A{all_summary_row}", "All Environments")}'
+        f'{cell(f"B{all_summary_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["monthly"]))}'
+        f'{cell(f"C{all_summary_row}", formula=f"SUM({column_name(total_col_start + 2)}{data_start}:{column_name(total_col_start + 2)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["annual"]))}'
+        f'{cell(f"D{all_summary_row}", formula=f"SUM({column_name(total_col_start + 3)}{data_start}:{column_name(total_col_start + 3)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["one_time"]))}'
+        "</row>"
     )
 
-    widths = [16, 72, 18, 16] + ([12, 12, 18, 18, 18] * len(environments)) + [12, 20, 20, 20, 42]
+    sheet_rows: list[str] = [
+        row_xml(1, [f"Customer BOM (as of {today})"]),
+        row_xml(2, [f"Reference label: {reference_label}"]),
+        row_xml(3, [f"Currency: {currency}"]),
+        row_xml(4, [f"Realm: {realm}"]),
+        *top_summary_rows,
+        f'<row r="{group_header_row}">{"".join(group_cells)}</row>',
+        f'<row r="{table_header_row}">{"".join(header_cells)}</row>',
+        *data_rows,
+        row_xml(data_end + 2, ["Customer-facing view shows list prices only."]),
+        row_xml(
+            disclaimer_row,
+            [
+                "Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. "
+                "It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."
+            ],
+        ),
+    ]
+
+    widths = [16, 72, 18, 16] + ([12, 12, 18, 18, 18] * len(environments)) + [12, 20, 20, 20]
     cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
-    dimension = f"A1:L{disclaimer_row}"
     dimension = f"A1:{column_name(last_col)}{disclaimer_row}"
     sheet_data = "".join(sheet_rows)
+    merge_refs = [f"A{group_header_row}:D{group_header_row}"]
+    for env_index in range(len(environments)):
+        start_col = 5 + (env_index * 5)
+        merge_refs.append(f"{column_name(start_col)}{group_header_row}:{column_name(start_col + 4)}{group_header_row}")
+    merge_refs.append(f"{column_name(total_col_start)}{group_header_row}:{column_name(total_col_start + 3)}{group_header_row}")
+    merges = f'<mergeCells count="{len(merge_refs)}">' + "".join(f'<mergeCell ref="{ref}"/>' for ref in merge_refs) + "</mergeCells>"
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <dimension ref="{dimension}"/>
-  <sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="{table_header_row}" topLeftCell="A{data_start}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>{cols}</cols>
   <sheetData>{sheet_data}</sheetData>
-  <autoFilter ref="A6:{column_name(last_col)}{data_end}"/>
+  {merges}
+  <autoFilter ref="A{table_header_row}:{column_name(last_col)}{data_end}"/>
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 </worksheet>'''
 

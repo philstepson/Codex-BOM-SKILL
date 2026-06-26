@@ -44,7 +44,7 @@ For multi-environment proposal workbooks, tell the skill which environment is be
 
 Legacy or sample Excel BOMs are useful as layout references, but their embedded prices may not be current. The skill should refresh pricing from the Oracle pricing calculator, Cost Estimator export, or verified current eSource PDF rather than relying on old sample workbook price-list tabs.
 
-For customer delivery, the important sheet is a customer-facing BOM. It should show each SKU once, with separate column blocks for each environment. A SKU that applies to Production and DR but not Non-Prod should have Production and DR values populated and Non-Prod values blank. The sheet should include environment summaries and final all-environment totals. Hidden helper sheets from the classic sample are optional. When you ask for a customer version showing list price only, the customer-facing sheet should not show discount calculations.
+For customer delivery, the important sheet is a customer-facing BOM. It should show each SKU once, with separate column blocks for each environment. A SKU that applies to Production and DR but not Non-Prod should have Production and DR values populated and Non-Prod values blank. The sheet should include a clear environment summary block, grouped environment headers, and final all-environment totals. Hidden helper sheets from the classic sample are optional. When you ask for a customer version showing list price only, the customer-facing sheet should not show discount calculations or verbose source notes.
 
 A future enhancement is a configured-system summary that describes the resulting platform in resource terms, not just price terms. For Exadata, that means requested ECPUs, configured and available processor capacity, memory, usable storage, local storage limits, and relevant I/O or bandwidth limits. A simple Draw.io block diagram could also show the configured system and environment layout for customer discussion.
 
@@ -203,7 +203,7 @@ The output columns are:
 
 The customer-facing columns follow this pattern:
 
-`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `<Environment> Qty`, `<Environment> Hrs`, `<Environment> Monthly List`, `<Environment> Annual List`, `<Environment> One-Time List`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, `Total One-Time List`, and `Customer Note`.
+`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `Monthly List`, `Annual List`, `One-Time List`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
 
 `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 

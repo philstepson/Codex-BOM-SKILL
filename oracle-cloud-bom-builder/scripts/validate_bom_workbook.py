@@ -104,14 +104,25 @@ def main() -> None:
         fail("Missing customer-facing BOM worksheet")
 
     customer_cells = read_sheet(args.workbook, "xl/worksheets/sheet2.xml")
-    customer_headers = [customer_cells.get(f"{chr(65 + idx)}6", "") for idx in range(80)]
-    if customer_headers[:4] != EXPECTED_CUSTOMER_HEADERS:
-        fail(f"Customer BOM header row mismatch: {customer_headers}")
+    customer_values = set(customer_cells.values())
+    customer_header_row = None
+    for row_num in range(1, 40):
+        candidate = [customer_cells.get(f"{chr(65 + idx)}{row_num}", "") for idx in range(4)]
+        if candidate == EXPECTED_CUSTOMER_HEADERS:
+            customer_header_row = row_num
+            break
+    if customer_header_row is None:
+        fail("Customer BOM header row mismatch")
+    customer_headers = [customer_cells.get(f"{chr(65 + idx)}{customer_header_row}", "") for idx in range(80)]
     if "Discount %" in customer_cells.values() or "Discounted Monthly Cost" in customer_cells.values():
         fail("Customer BOM should not expose discount columns")
-    if not any(str(value).endswith(" Qty") for value in customer_headers):
+    if "Customer Note" in customer_cells.values():
+        fail("Customer BOM should not expose customer note column")
+    if "Environment Summary" not in customer_values:
+        fail("Customer BOM missing environment summary block")
+    if not any(value == "Qty" for value in customer_headers):
         fail("Customer BOM missing environment quantity columns")
-    if not any(str(value).endswith(" Monthly List") for value in customer_headers):
+    if not any(value == "Monthly List" for value in customer_headers):
         fail("Customer BOM missing environment monthly list-price columns")
     if "Total Monthly List" not in customer_headers:
         fail("Customer BOM missing final total monthly list-price column")
@@ -119,11 +130,9 @@ def main() -> None:
         fail("Customer BOM missing final total annual list-price column")
     if "Total One-Time List" not in customer_headers:
         fail("Customer BOM missing final total one-time list-price column")
-    if "Customer Note" not in customer_headers:
-        fail("Customer BOM missing customer note column")
     if not any(re.fullmatch(r"=SUM\([A-Z]+\d+:[A-Z]+\d+\)", value) for value in customer_cells.values()):
         fail("Customer BOM missing environment summary formulas")
-    if "All Environments Total" not in customer_cells.values():
+    if "All Environments" not in customer_cells.values():
         fail("Customer BOM missing all-environments total row")
 
     workbook_root = read_xml(args.workbook, "xl/workbook.xml")
