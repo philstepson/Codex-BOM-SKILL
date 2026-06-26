@@ -12,11 +12,29 @@ Ask these when missing:
 - Region and realm, defaulting to `PUBLIC` only if the user does not specify.
 - Currency, defaulting to `USD` only if not specified.
 - Number of environments, such as production, non-production, test, and disaster recovery.
+- Environment assignment for each resource group or SKU row. Ask which environment is being described when the user provides resources without an environment label.
 - Expected hours per month, usually `744` for always-on resources.
 - Desired discount percentage. The generated workbook accepts either whole-number entry such as `15` or decimal entry such as `0.15`.
 - License model: BYOL, license included, Universal Credits, or unknown.
 - Whether pricing should be list-price only, discounted estimate, or both.
+- Whether the customer-facing BOM should show list price only. If yes, keep discount calculations out of the customer-facing view.
 - Any explicit add-on SKUs the user wants included, including service, installation, activation, or other non-product price-list rows.
+
+## Environment Modeling
+
+Use this section for customer proposal workbooks, multi-environment BOMs, migration assessments, and any request based on current-state database or server consumption metrics.
+
+Ask:
+
+- Which environment each described workload belongs to: production, non-production, test/dev, disaster recovery, shared/common, or a customer-specific label.
+- Whether each environment needs separate SKU quantities, hours, discount assumptions, ramp timing, or inclusion flags.
+- Whether shared infrastructure should be allocated to one environment, duplicated across environments, or tracked as a separate shared environment.
+- Whether the customer wants the workbook to show multiple environments in one BOM, such as Production, Test/Dev, and DR.
+- Whether a separate customer-facing BOM sheet is required. For customer-facing output, show all SKUs, quantities, metrics or billing basis, and list prices.
+- Whether a configured-system summary is desired, showing requested versus configured versus available processor, memory, and storage resources.
+- Whether an optional Draw.io-style block diagram would be useful for the proposal.
+
+Do not infer environment assignment from row order or service name. If the user gives only resources or SKUs, ask for the environment before building a multi-environment workbook.
 
 ## Database Services
 
@@ -50,10 +68,13 @@ For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Googl
 
 - Use the Oracle pricing calculator output as the source of truth for SKU rows, quantities, unit prices, and monthly costs.
 - Treat Database@Azure, Database@Google Cloud, and Database@AWS as Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing.
+- For X11M configurations, read `references/exadata-dedicated-infrastructure-x11m.md` before sizing or validating the BOM.
 - Ask for BYOL or License Included when the prompt does not specify the license model.
 - Ask for the Exadata generation/model if the user might need a prior version. If omitted and the user has not requested a prior generation, state that the latest calculator model is assumed.
 - Start from the calculator default quarter rack, 2 database servers, and 3 storage servers unless the user asks for another base configuration.
 - Ask for any additional database servers or storage servers because those change the relevant calculator SKU quantities.
+- Ask whether the architecture is Base System or elastic X11M. Base System is fixed and non-expandable; elastic X11M starts with 2 database servers and 3 storage servers and can scale to 32 database servers and 64 storage servers.
+- Ask whether local backups are required when maximum database size is part of the sizing model.
 
 For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cloud-at-customer-x11m.md` and gather:
 
@@ -167,6 +188,8 @@ When the user cannot answer a required pricing parameter:
 - Preserve formulas where possible so values calculate after the missing inputs are entered.
 
 Do not invent Oracle SKU prices. Use user-provided Oracle Cost Estimator data, authenticated Oracle pricing calculator output, or current Oracle pricing sources only when explicitly requested and verified.
+
+Legacy or sample Excel BOMs may contain stale embedded price-list sheets. Use those files as layout, formula, and workflow references only unless their pricing tabs have been refreshed from a current Oracle source and date-verified for the active BOM.
 
 When the user supplies an explicit SKU to add to a BOM:
 

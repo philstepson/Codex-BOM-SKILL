@@ -15,6 +15,7 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
    - Part quantity, instance quantity, usage quantity, unit price, and monthly cost.
    - Service type, usually `PAAS`, unless the user provides another Oracle service category.
    - Any named OCI services, custom labels, notes, architecture assumptions, and region/currency details.
+   - Environment names and the environment assignment for each resource or SKU row, such as production, non-production, test/dev, disaster recovery, or shared/common.
    - Any explicit add-on SKUs the user wants included, even when they are services or non-product price-list items rather than core cloud resources.
    - Supplemental pricing source details when calculator data is incomplete, especially the current Oracle eSource PDF URL and the document date shown on the PDF front page.
 2. Decide pricing source before extracting rows. Try Oracle pricing calculator or Oracle Cost Estimator coverage first for any BOM that is not clearly Exadata Cloud@Customer. For standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, Database@AWS, and most OCI services, use calculator output as the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM format without changing the calculator price fields.
@@ -34,6 +35,12 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
 Read `references/oracle-estimator-workbook.md` before building or modifying a BOM workbook.
 
 Use `assets/oracle-cost-estimator-sample.xlsx` as a format reference when a user asks to match the Oracle online pricing estimator export.
+
+When the user asks for the preferred classic Excel BOM format, a customer proposal workbook, or a multi-environment BOM, read `references/classic-excel-bom-layout.md`. Treat the classic sample workbook as a tested layout reference only; do not use its embedded price lists as current pricing.
+
+For proposal-style workbooks, include a customer-facing BOM view that shows environment, all SKUs, descriptions, quantities, metrics or billing basis, and list prices. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic only in internal working sheets if needed.
+
+As a future enhancement for configured systems, the skill may create an optional system summary that describes requested, configured, and available processor, memory, and storage resources using the relevant datasheet reference plus BOM inputs. A simple Draw.io-compatible block diagram may also be produced when requested, but it is not required for normal BOM generation.
 
 Use `scripts/build_bom_template.py` when a deterministic starter workbook is appropriate. It can build from its embedded sample data or from a CSV with Oracle estimator headers.
 
@@ -59,6 +66,8 @@ If the user provides an explicit SKU to add, include it as a line item even when
 
 For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, use the Oracle pricing calculator as the go-to pricing and SKU source. Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The calculator default is a quarter rack with 2 database servers and 3 storage servers; additional database or storage servers should be reflected by the calculator-generated SKU quantities before the rows are transposed into the BOM.
 
+When the requested BOM includes OCI Dedicated Exadata or Database@ Exadata X11M, read `references/exadata-dedicated-infrastructure-x11m.md` before asking questions or preparing rows. Use it to validate Base System versus elastic X11M behavior, server-count limits, VM/cluster limits, memory, storage, IOPS, bandwidth, local-backup assumptions, and the calculator-first pricing path.
+
 For Exadata Cloud@Customer, explicitly gather model-level resource details because Oracle Cost Estimator may not cover the C@C infrastructure pricing path. Ask for database server model/count, storage server model/count, rack configuration, and any other Cloud@Customer infrastructure components the user expects in the BOM.
 
 For Exadata Cloud@Customer X11M base-rack BOMs, use the Base System Rack SKU when the user asks for a base rack. Keep any explicitly requested storage-server row, ECPU row, and add-on service SKU separate. For example, a base-rack BOM may include `B110634` for `Exadata Cloud@Customer - Base System Rack - X11M`, `B110647` for three High Capacity storage servers, `B110663` for 64 BYOL ECPUs, and `B91390` for the one-time installation and activation service.
@@ -70,6 +79,8 @@ When the requested BOM includes Exadata Database Service on Cloud@Customer X11M,
 Use `references/requirements-gathering.md` when the user is designing a cloud architecture, system configuration, or migration target and has not provided complete Oracle Cost Estimator rows.
 
 Prompt for quantities and service parameters required to build estimator-ready BOM rows, such as ECPUs/OCPUs, instance counts, storage quantities, usage hours, deployment model, license model, HA/DR assumptions, backup retention, and environment counts.
+
+For multi-environment or proposal-style workbooks, ask which environment each described resource belongs to before pricing. Do not assume all resources are production. Capture customer-specific environment labels when the user provides them, and keep shared/common resources explicit.
 
 Ask targeted questions only for services that are in scope. Do not run a full questionnaire when the user already supplied estimator export rows.
 
@@ -94,6 +105,7 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 - If row-level monthly cost is missing but quantity and unit price are present, calculate monthly list cost as `Part Qty * Instance Qty * Usage Qty * Unit Price`.
 - Do not invent Oracle SKU pricing. Ask for pricing input or leave fields blank when pricing is unavailable.
 - If the user asks for current Oracle pricing and does not provide it, use only current Oracle sources or the Oracle Cost Estimator, and cite the source used.
+- Do not use pricing embedded in legacy sample workbooks as authoritative current pricing. Those workbooks are layout and process references unless their price-list sheets have been refreshed and date-verified for the active run.
 
 ## Validation Checklist
 
@@ -107,8 +119,10 @@ Before finalizing the workbook, confirm:
 - Discounted totals include cached formula values and workbook calculation properties force automatic recalculation on open.
 - One-time service rows are excluded from recurring monthly cost and included once in discounted annual cost when requested.
 - Original list-price values remain visible.
+- Customer-facing proposal views show all SKUs, quantities, and list prices, and omit discounts when the user asks for list-price-only customer output.
 - Workbook is not protected or locked unless the user asks for protection.
 - Notes identify assumptions, missing prices, and non-binding estimate status.
+- Optional configured-system summaries distinguish requested resources from configured infrastructure capacity and workload-available capacity.
 
 ## Bundled Scripts
 

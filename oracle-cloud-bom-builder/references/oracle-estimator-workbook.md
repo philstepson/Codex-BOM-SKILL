@@ -2,6 +2,10 @@
 
 Use this reference when creating Oracle Cloud BOM Excel workbooks that should resemble an Oracle Cloud Cost Estimator export.
 
+For the preferred classic multi-environment proposal format, also read `references/classic-excel-bom-layout.md`. The Oracle estimator-style layout remains useful for deterministic starter BOMs and calculator/export transposition; the classic workbook layout is the better target when the user needs multiple environments, current-state inventory, usage history, ramping, discount comparison, or TCO presentation in one workbook.
+
+The required customer-delivery view for proposal workbooks is a visible customer-facing BOM that lists all SKUs, quantities, and list prices. Hidden support sheets from a legacy workbook are optional unless the user asks for them.
+
 ## Observed Source Template
 
 Sample asset: `assets/oracle-cost-estimator-sample.xlsx`
@@ -138,6 +142,10 @@ The workbook should also force recalculation on open. In `xl/workbook.xml`, `cal
 ```
 
 Do not include a stale `xl/calcChain.xml` from the template after replacing worksheet formulas.
+
+## Legacy Workbook Pricing Warning
+
+When a user supplies a sample or classic Excel BOM, treat the workbook's embedded price-list sheets as potentially stale. Use the workbook to learn preferred layout, formulas, environment organization, and proposal workflow. For current pricing, refresh from the Oracle pricing calculator, Cost Estimator export, or verified current eSource PDF according to the pricing rules above.
 
 ## Formatting Guidance
 

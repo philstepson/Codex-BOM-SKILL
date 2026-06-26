@@ -3,6 +3,7 @@
 Use this reference when preparing or validating BOM rows for Oracle Exadata Database Service on Cloud@Customer X11M. Sources supplied by the user:
 
 - `exadb-cc-x11m-ds.pdf`: `Exadata Database Service on Cloud@Customer X11M`, Version 1.4, Oracle public datasheet, copyright 2026.
+- `/Users/PWSTEPHE/Downloads/exadb-cc-x11m-ds (1).pdf`: same public datasheet, Version 1.4, 13 pages, ingested 2026-06-26.
 - `ExaC@C X11M-config.pptx`: `Exadata Cloud@Customer X11M Technical Overview`, Oracle Exadata Product Management, April 2026.
 
 This reference captures configuration rules and sizing facts that affect BOM preparation. It is not a pricing source.
@@ -34,6 +35,10 @@ This reference captures configuration rules and sizing facts that affect BOM pre
 - Default storage redundancy should be High unless the user or source architecture explicitly specifies Normal redundancy.
 - High redundancy keeps two mirrored copies of the original data and can survive failure of two HDAs.
 - Normal redundancy keeps one mirrored copy of the original data, provides more usable storage capacity than high redundancy, and can survive failure of one HDA.
+- Infrastructure subscription minimum term is 4 years.
+- Infrastructure subscription includes disk/flash, IOPS, and memory for the selected configuration. Exadata Database Service software licensing is based on ECPUs allocated to a VM Cluster.
+- Supported software license models are License Included and BYOL. BYOL supports Oracle Database Enterprise Edition entitlements; Oracle Database Standard Edition is not supported.
+- The same Exadata Cloud@Customer infrastructure can run Exadata Database Service and Autonomous Database side by side.
 
 ## VM And Cluster Limits
 
@@ -71,12 +76,45 @@ This reference captures configuration rules and sizing facts that affect BOM pre
 
 These examples are representative configurations from the datasheet, not the only valid combinations.
 
-| Example | Database servers | Storage servers | Total ECPUs | Max VM clusters | Total usable storage |
-| --- | --- | --- | ---: | ---: | --- |
-| Base System | 2 Base | 3 Base | 240 | 12 | 106 TB Base storage |
-| Elastic Example 1 | 2 Standard, Large, or Extra Large | 3 High Capacity or Extreme Flash | 1,520 | 12 | 240 TB HC disk or 111 TB EF flash |
-| Elastic Example 2 | 8 Standard, Large, or Extra Large | 8 High Capacity or Extreme Flash | 6,080 | 24 | 640 TB HC disk or 298 TB EF flash |
-| Elastic Example 3 | 2 Standard, Large, or Extra Large | 14 High Capacity or Extreme Flash | 1,520 | 12 | 1,120 TB HC disk or 521 TB EF flash |
+| Example | Database servers | Storage servers | Total DB cores | Total ECPUs | Max VM clusters | Total usable storage |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| Base System | 2 Base | 3 Base | 60 | 240 | 12 | 106 TB Base storage |
+| Elastic Example 1 | 2 Standard, Large, or Extra Large | 3 High Capacity or Extreme Flash | 380 | 1,520 | 12 | 240 TB HC disk or 111 TB EF flash |
+| Elastic Example 2 | 8 Standard, Large, or Extra Large | 8 High Capacity or Extreme Flash | 1,520 | 6,080 | 24 | 640 TB HC disk or 298 TB EF flash |
+| Elastic Example 3 | 2 Standard, Large, or Extra Large | 14 High Capacity or Extreme Flash | 380 | 1,520 | 12 | 1,120 TB HC disk or 521 TB EF flash |
+
+## Datasheet Capacity And Performance Examples
+
+Use these values as technical sizing reference points when current-state database consumption needs to be projected into future-state Cloud@Customer resources. They are not SKU prices.
+
+| Example | XRMEM | Flash cache | EF usable flash | HC usable disk | Max DB size HC no local backup | Max DB size HC local backup | Max SQL read IOPS | Max SQL write IOPS | Max flash bandwidth | Max XRMEM bandwidth | Max disk bandwidth | Max data load rate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Base System | n/a | 38.4 TB | n/a | 106 TB | 85 TB | 42 TB | 597,000 | 544,000 | 37.5 GB/s | n/a | 2.7 GB/s | 3.8 TB/hr |
+| Elastic Example 1 | 3.75 TB | 81.6 TB | 111 TB | 240 TB | 192 TB | 96 TB | 5,600,000 | 3,000,000 | 300 GB/s | 1,500 GB/s | 5.4 GB/s | 7.5 TB/hr |
+| Elastic Example 2 | 10 TB | 217.6 TB | 298 TB | 640 TB | 512 TB | 256 TB | 22,400,000 | 8,000,000 | 800 GB/s | 4,000 GB/s | 14.4 GB/s | 20.0 TB/hr |
+| Elastic Example 3 | 17.5 TB | 380.8 TB | 521 TB | 1,120 TB | 896 TB | 448 TB | 5,600,000 | 5,000,000 | 1,400 GB/s | 7,000 GB/s | 25.0 GB/s | 7.5 TB/hr |
+
+## Per-Server Performance Values
+
+| Database server type | Max SQL flash bandwidth | Max SQL read IOPS | Max SQL write IOPS |
+| --- | ---: | ---: | ---: |
+| Base | n/a | 298,500 | 272,000 |
+| Standard, Large, Extra Large | n/a | 2,800,000 | 2,500,000 |
+
+| Storage server type | Max SQL flash bandwidth | Max SQL XRMEM bandwidth | Max SQL read IOPS | Max SQL write IOPS |
+| --- | ---: | ---: | ---: | ---: |
+| Base | 12.5 GB/s | n/a | 298,500 | 260,000 |
+| Extreme Flash | 100 GB/s | 500 GB/s | 2,800,000 | 1,000,000 |
+| High Capacity | 100 GB/s | 500 GB/s | 2,800,000 | 1,000,000 |
+
+## Sizing And Migration Guidance
+
+- Use ECPU scaling for database software consumption; customers pay for ECPUs allocated to VM Clusters and can scale ECPUs online.
+- Use database server type/count for available cores, ECPUs, and VM memory constraints.
+- Use storage server type/count for usable capacity, XRMEM, flash cache, IOPS, and bandwidth constraints.
+- Treat maximum DB size as dependent on local-backup assumptions. Ask whether local backups are required before presenting maximum database size.
+- Treat data load rate as a reference point only. The datasheet notes that load rates are typically limited by database server CPU and vary based on load method, indexes, data types, compression, and partitioning.
+- For migration proposals, current-state CPU, memory, storage, IOPS, and throughput should be adjusted by agreed modernization factors before mapping to server counts and ECPU quantities.
 
 ## BOM Validation Guidance
 
@@ -95,6 +133,7 @@ When a BOM includes Exadata Cloud@Customer X11M:
 - Flag multi-rack configurations above 32 database servers or above 64 storage servers.
 - Flag multi-rack configurations above 6 total racks.
 - Calculate total ECPUs, database cores, memory, storage cores, XRMEM, flash cache, and usable storage from the selected per-server values when explicit totals are not supplied.
+- Validate current-state or projected workload requirements against DB memory, usable local storage, Exadata storage capacity, SQL IOPS, SQL bandwidth, and data load-rate constraints when those metrics are provided.
 - Identify storage redundancy as High or Normal when usable storage capacity is part of the BOM; default to High when unspecified.
 - If using datasheet usable-storage figures, note that they are based on high redundancy unless a Normal redundancy capacity has been supplied or calculated separately.
 - Ask whether local backups are required before using maximum database size values.
@@ -117,6 +156,10 @@ Ask for these only when the BOM needs rack/network/facility assumptions:
 - Customer controls client network configuration, including flexible VLAN configurations, separate client and backup networks, DNS, NTP, and routers.
 - Each rack is 42 RU and includes 2 redundant PDUs, 2 x 36-port QSFP28 100 Gb/s RoCE switches, and 1 x 48-port Cisco Ethernet switch for Oracle Cloud Operations infrastructure administration.
 - Multiple-rack configurations also include an additional 36-port QSFP28 100 Gb/s RoCE switch.
+- Datasheet example rack environmental values:
+  - Base System: 999.4 lb, maximum 6.2 kW / 6.3 kVA, typical 4.3 kW / 4.4 kVA, maximum cooling 21,072 BTU/hr, maximum airflow 976 CFM.
+  - Elastic Example 1 with Standard DB and High Capacity storage: 1,035.8 lb, maximum 7.5 kW / 7.7 kVA, typical 5.3 kW / 5.4 kVA, maximum cooling 25,666 BTU/hr, maximum airflow 1,188 CFM.
+  - Elastic Example 1 with Standard DB and Extreme Flash storage: 993.8 lb, maximum 7.1 kW / 7.3 kVA, typical 5.0 kW / 5.1 kVA, maximum cooling 24,356 BTU/hr, maximum airflow 1,128 CFM.
 - Airflow must be front-to-back.
 - Operating temperature and humidity: 5 C to 32 C, 10% to 90% relative humidity, non-condensing.
 - Operating altitude up to 3,048 m; maximum ambient temperature is derated by 1 C per 300 m above 900 m.
