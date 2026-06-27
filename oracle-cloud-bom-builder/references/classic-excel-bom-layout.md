@@ -99,7 +99,7 @@ The preferred multi-environment pattern is one row per unique SKU or priced line
 - `DR Qty`, `DR Hrs`, `DR List Price`, `DR Discounted Price`.
 - Final total columns for all environments.
 
-The workbook should also include an environment summary block and a final all-environments total. This is the ideal customer-review format because it lets the reader scan each SKU once, see exactly which environments consume it, and understand the total cost of each environment independently.
+The workbook should also include environment summary rows under the SKU rows and a final all-environments total. This is the ideal customer-review format because it lets the reader scan each SKU once, see exactly which environments consume it, and understand the total cost of each environment independently.
 
 ## Required Customer-Facing BOM View
 
@@ -111,9 +111,9 @@ The customer-facing BOM should show:
 - Oracle product or service description.
 - Metric or billing basis.
 - Unit list price.
-- One column block for each environment, with quantity, usage quantity or hours, monthly list price, annual list price, and one-time list price.
+- One column block for each environment, with quantity, usage quantity or hours, annual recurring list price, and one-time list price.
 - Final total columns for all environments.
-- A visible summary block for each environment and one final all-environments total.
+- Visible summary rows under the SKU rows for each environment and one final all-environments total.
 
 The customer-facing BOM should hide or omit:
 

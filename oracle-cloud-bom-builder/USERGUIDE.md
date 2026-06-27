@@ -44,7 +44,7 @@ For multi-environment proposal workbooks, tell the skill which environment is be
 
 Legacy or sample Excel BOMs are useful as layout references, but their embedded prices may not be current. The skill should refresh pricing from the Oracle pricing calculator, Cost Estimator export, or verified current eSource PDF rather than relying on old sample workbook price-list tabs.
 
-For customer delivery, the important sheet is a customer-facing BOM. It should show each SKU once, with separate column blocks for each environment. A SKU that applies to Production and DR but not Non-Prod should have Production and DR values populated and Non-Prod values blank. The sheet should include a clear environment summary block, grouped environment headers, and final all-environment totals. Hidden helper sheets from the classic sample are optional. When you ask for a customer version showing list price only, the customer-facing sheet should not show discount calculations or verbose source notes.
+For customer delivery, the important sheet is a customer-facing BOM. It should show each SKU once, with separate column blocks for each environment. A SKU that applies to Production and DR but not Non-Prod should have Production and DR values populated and Non-Prod values blank. The sheet should include grouped environment headers, summary rows under the SKU rows, and final all-environment totals. Hidden helper sheets from the classic sample are optional. When you ask for a customer version showing list price only, the customer-facing sheet should not show discount calculations or verbose source notes.
 
 A future enhancement is a configured-system summary that describes the resulting platform in resource terms, not just price terms. For Exadata, that means requested ECPUs, configured and available processor capacity, memory, usable storage, local storage limits, and relevant I/O or bandwidth limits. A simple Draw.io block diagram could also show the configured system and environment layout for customer discussion.
 
@@ -183,27 +183,24 @@ python3 scripts/build_bom_template.py \
 
 The generated workbook includes:
 
-- A primary `PAAS` worksheet by default.
-- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, monthly list, annual list, and one-time list-price blocks.
-- Oracle estimator columns plus discount columns, with `Custom Note` as the rightmost column.
+- A primary `PAAS` worksheet by default, using the same wide environment-block layout as the customer view and adding discount columns.
+- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, annual recurring list price, and one-time list-price blocks.
 - A single editable discount input in `K3`.
-- Discounted monthly and annual cost columns before `Custom Note`.
-- Monthly and annual totals.
+- Discounted list-price columns on the `PAAS` working sheet.
+- Environment summary rows below the SKU rows.
 - Cached formula values for discounted row totals and grand totals.
 - Workbook calculation settings that force automatic recalculation when the file opens.
 - Estimate disclaimer text.
 
 The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
 
-The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific monthly, annual, and one-time list-price summaries plus all-environment totals.
+The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific annual recurring list price and one-time list-price summaries plus all-environment totals.
 
-The output columns are:
-
-`Part`, `Description`, `Part Qty`, `Instance Qty`, `Usage Qty`, `Unit Price`, `Monthly Cost`, `Custom Label`, `Discount %`, `Discounted Monthly Cost`, `Discounted Annual Cost`, `Custom Note`
+The `PAAS` working sheet columns follow the same grouped environment pattern as the customer sheet, but include `Disc Price` and `One-Time Disc` columns.
 
 The customer-facing columns follow this pattern:
 
-`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `Monthly List`, `Annual List`, `One-Time List`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
+`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `List Price`, `One-Time List`, followed by `Total Qty`, `Total List Price`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
 
 `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 

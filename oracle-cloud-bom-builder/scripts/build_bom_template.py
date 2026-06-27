@@ -421,6 +421,275 @@ def with_supplemental_pricing(
     return enriched
 
 
+def build_wide_environment_sheet(
+    rows: list[BomRow],
+    discount: float,
+    reference_label: str,
+    currency: str,
+    realm: str,
+    currency_style: int,
+    include_discount: bool,
+    selected: bool = False,
+) -> str:
+    today = date.today().strftime("%m/%d/%Y")
+    normalized_discount = discount / 100 if discount > 1 else discount
+    customer_rows = [row for row in rows if row.part]
+    environments: list[str] = []
+    for row in customer_rows:
+        environment = row.environment or "General"
+        if environment not in environments:
+            environments.append(environment)
+    if not environments:
+        environments = ["General"]
+
+    def billing_basis(row: BomRow) -> str:
+        if row_one_time_cost(row) is not None and row_monthly_cost(row)[2] is None:
+            return "One-time"
+        if row_monthly_cost(row)[2] is not None or row_monthly_cost(row)[1] is not None:
+            return "Recurring usage"
+        return ""
+
+    grouped: dict[tuple[str, str, str, str], dict[str, BomRow]] = {}
+    order: list[tuple[str, str, str, str]] = []
+    for row in customer_rows:
+        key = (row.part, row.description, str(row.unit_price), billing_basis(row))
+        if key not in grouped:
+            grouped[key] = {}
+            order.append(key)
+        grouped[key][row.environment or "General"] = row
+
+    summary_style = currency_style + 1
+    detail_style = currency_style + 2
+    env_style_start = currency_style + 3
+    total_style = env_style_start + len(ENVIRONMENT_FILL_COLORS) - 1
+    base_cols = 4
+    env_width = 6 if include_discount else 5
+    total_width = 5 if include_discount else 4
+    group_header_row = 5
+    table_header_row = 6
+    data_start = 7
+    data_end = data_start + len(order) - 1
+    summary_header_row = data_end + 2
+    summary_start = summary_header_row + 1
+    all_summary_row = summary_start + len(environments)
+    note_row = all_summary_row + 2
+    disclaimer_row = note_row + 2
+    total_col_start = base_cols + 1 + (len(environments) * env_width)
+    last_col = total_col_start + total_width - 1
+
+    title = "Oracle Investment Proposal" if include_discount else "Customer BOM"
+    top_rows = [
+        row_xml(1, [f"{title} (as of {today})"]),
+        row_xml(2, [f"Reference label: {reference_label}"]),
+        row_xml(3, [f"Currency: {currency}", "", "", "", "", "", "", "", "", "Discount %", discount] if include_discount else [f"Currency: {currency}"], {11: PERCENT_STYLE_ID} if include_discount else None),
+        row_xml(4, [f"Realm: {realm}"]),
+    ]
+
+    group_cells = [
+        cell(f"A{group_header_row}", "SKU Detail", style=detail_style),
+        cell(f"B{group_header_row}", "", style=detail_style),
+        cell(f"C{group_header_row}", "", style=detail_style),
+        cell(f"D{group_header_row}", "", style=detail_style),
+    ]
+    header_cells = [
+        cell(f"A{table_header_row}", "Part", style=detail_style),
+        cell(f"B{table_header_row}", "Description", style=detail_style),
+        cell(f"C{table_header_row}", "Billing Basis", style=detail_style),
+        cell(f"D{table_header_row}", "Unit List Price", style=detail_style),
+    ]
+    for env_index, environment in enumerate(environments):
+        start_col = base_cols + 1 + (env_index * env_width)
+        env_style = env_style_start + (env_index % (len(ENVIRONMENT_FILL_COLORS) - 1))
+        group_cells.append(cell(f"{column_name(start_col)}{group_header_row}", environment, style=env_style))
+        group_cells.extend(cell(f"{column_name(start_col + offset)}{group_header_row}", "", style=env_style) for offset in range(1, env_width))
+        labels = ["Qty", "Hrs", "List Price"]
+        if include_discount:
+            labels.append("Disc Price")
+        labels.extend(["One-Time List", "One-Time Disc"] if include_discount else ["One-Time List"])
+        for offset, label in enumerate(labels):
+            header_cells.append(cell(f"{column_name(start_col + offset)}{table_header_row}", label, style=env_style))
+    group_cells.append(cell(f"{column_name(total_col_start)}{group_header_row}", "All Environments", style=total_style))
+    group_cells.extend(cell(f"{column_name(total_col_start + offset)}{group_header_row}", "", style=total_style) for offset in range(1, total_width))
+    total_labels = ["Total Qty", "Total List Price"]
+    if include_discount:
+        total_labels.append("Total Disc Price")
+    total_labels.extend(["Total One-Time List", "Total One-Time Disc"] if include_discount else ["Total One-Time List"])
+    for offset, label in enumerate(total_labels):
+        header_cells.append(cell(f"{column_name(total_col_start + offset)}{table_header_row}", label, style=total_style))
+
+    env_totals = {env: {"list": 0.0, "disc": 0.0, "one_list": 0.0, "one_disc": 0.0} for env in environments}
+    all_totals = {"list": 0.0, "disc": 0.0, "one_list": 0.0, "one_disc": 0.0}
+    data_rows: list[str] = []
+
+    for offset, key in enumerate(order):
+        row_num = data_start + offset
+        part, description, unit_price, basis = key
+        cells = [
+            cell(f"A{row_num}", part),
+            cell(f"B{row_num}", description),
+            cell(f"C{row_num}", basis),
+            cell(f"D{row_num}", unit_price),
+        ]
+        qty_cols: list[str] = []
+        list_cols: list[str] = []
+        disc_cols: list[str] = []
+        one_list_cols: list[str] = []
+        one_disc_cols: list[str] = []
+        row_totals = {"qty": 0.0, "list": 0.0, "disc": 0.0, "one_list": 0.0, "one_disc": 0.0}
+
+        for env_index, environment in enumerate(environments):
+            env_row = grouped[key].get(environment)
+            start_col = base_cols + 1 + (env_index * env_width)
+            qty_col = column_name(start_col)
+            hrs_col = column_name(start_col + 1)
+            list_col = column_name(start_col + 2)
+            disc_col = column_name(start_col + 3) if include_discount else ""
+            one_list_col = column_name(start_col + (4 if include_discount else 3))
+            one_disc_col = column_name(start_col + 5) if include_discount else ""
+            qty_cols.append(qty_col)
+            list_cols.append(list_col)
+            if include_discount:
+                disc_cols.append(disc_col)
+            one_list_cols.append(one_list_col)
+            if include_discount:
+                one_disc_cols.append(one_disc_col)
+
+            if env_row is None:
+                empty_count = env_width
+                cells.extend(cell(f"{column_name(start_col + i)}{row_num}", "", style=currency_style if i >= 2 else None) for i in range(empty_count))
+                continue
+
+            quantity = row_customer_quantity(env_row)
+            qty_num = number_or_none(quantity)
+            if qty_num is not None:
+                row_totals["qty"] += qty_num
+            monthly_value, monthly_formula_template, monthly_cache = row_monthly_cost(env_row)
+            recurring_list_value = monthly_value
+            recurring_list_cache = monthly_cache * 12 if monthly_cache is not None else None
+            if recurring_list_cache is not None:
+                recurring_list_value = recurring_list_cache
+            one_time_cache = row_one_time_cost(env_row)
+            is_one_time = one_time_cache is not None and monthly_cache is None
+            list_formula = None
+            if monthly_formula_template is not None:
+                list_formula = f'IF(OR({qty_col}{row_num}="",{hrs_col}{row_num}="",$D{row_num}=""),"",{qty_col}{row_num}*{hrs_col}{row_num}*$D{row_num}*12)'
+                recurring_list_value = ""
+            disc_formula = f'IF({list_col}{row_num}="","",{list_col}{row_num}*(1-{discount_formula()}))' if include_discount else None
+            disc_cache = recurring_list_cache * (1 - normalized_discount) if recurring_list_cache is not None else None
+            one_list_formula = None
+            one_disc_formula = None
+            if is_one_time:
+                one_list_formula = f'IF(OR({qty_col}{row_num}="",$D{row_num}=""),"",{qty_col}{row_num}*$D{row_num})'
+                if include_discount:
+                    one_disc_formula = f'IF({one_list_col}{row_num}="","",{one_list_col}{row_num}*(1-{discount_formula()}))'
+            else:
+                one_time_cache = None
+            one_disc_cache = one_time_cache * (1 - normalized_discount) if one_time_cache is not None else None
+
+            row_totals["list"] += recurring_list_cache or 0.0
+            row_totals["disc"] += disc_cache or 0.0
+            row_totals["one_list"] += one_time_cache or 0.0
+            row_totals["one_disc"] += one_disc_cache or 0.0
+            env_totals[environment]["list"] += recurring_list_cache or 0.0
+            env_totals[environment]["disc"] += disc_cache or 0.0
+            env_totals[environment]["one_list"] += one_time_cache or 0.0
+            env_totals[environment]["one_disc"] += one_disc_cache or 0.0
+            cells.extend(
+                [
+                    cell(f"{qty_col}{row_num}", quantity),
+                    cell(f"{hrs_col}{row_num}", env_row.usage_qty),
+                    cell(f"{list_col}{row_num}", recurring_list_value if list_formula is None else "", formula=list_formula, style=currency_style, formula_value=cached_value(recurring_list_cache)),
+                ]
+            )
+            if include_discount:
+                cells.append(cell(f"{disc_col}{row_num}", formula=disc_formula, style=currency_style, formula_value=cached_value(disc_cache)))
+            cells.append(cell(f"{one_list_col}{row_num}", formula=one_list_formula, style=currency_style, formula_value=cached_value(one_time_cache)))
+            if include_discount:
+                cells.append(cell(f"{one_disc_col}{row_num}", formula=one_disc_formula, style=currency_style, formula_value=cached_value(one_disc_cache)))
+
+        total_cells = [
+            cell(f"{column_name(total_col_start)}{row_num}", formula="+".join(f"{col}{row_num}" for col in qty_cols), formula_value=cached_value(row_totals["qty"])),
+            cell(f"{column_name(total_col_start + 1)}{row_num}", formula="+".join(f"{col}{row_num}" for col in list_cols), style=currency_style, formula_value=cached_value(row_totals["list"])),
+        ]
+        next_offset = 2
+        if include_discount:
+            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in disc_cols), style=currency_style, formula_value=cached_value(row_totals["disc"])))
+            next_offset += 1
+        total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in one_list_cols), style=currency_style, formula_value=cached_value(row_totals["one_list"])))
+        next_offset += 1
+        if include_discount:
+            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in one_disc_cols), style=currency_style, formula_value=cached_value(row_totals["one_disc"])))
+        cells.extend(total_cells)
+        all_totals["list"] += row_totals["list"]
+        all_totals["disc"] += row_totals["disc"]
+        all_totals["one_list"] += row_totals["one_list"]
+        all_totals["one_disc"] += row_totals["one_disc"]
+        data_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
+
+    summary_rows = [
+        f'<row r="{summary_header_row}">{cell(f"A{summary_header_row}", "Environment Summary", style=summary_style)}</row>'
+    ]
+    for env_index, environment in enumerate(environments):
+        row_num = summary_start + env_index
+        start_col = base_cols + 1 + (env_index * env_width)
+        list_col = column_name(start_col + 2)
+        disc_col = column_name(start_col + 3) if include_discount else ""
+        one_list_col = column_name(start_col + (4 if include_discount else 3))
+        one_disc_col = column_name(start_col + 5) if include_discount else ""
+        cells = [cell(f"A{row_num}", f"{environment} Total")]
+        cells.append(cell(f"{list_col}{row_num}", formula=f"SUM({list_col}{data_start}:{list_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["list"])))
+        if include_discount:
+            cells.append(cell(f"{disc_col}{row_num}", formula=f"SUM({disc_col}{data_start}:{disc_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["disc"])))
+        cells.append(cell(f"{one_list_col}{row_num}", formula=f"SUM({one_list_col}{data_start}:{one_list_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["one_list"])))
+        if include_discount:
+            cells.append(cell(f"{one_disc_col}{row_num}", formula=f"SUM({one_disc_col}{data_start}:{one_disc_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["one_disc"])))
+        summary_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
+    all_cells = [cell(f"A{all_summary_row}", "All Environments Total")]
+    all_cells.append(cell(f"{column_name(total_col_start + 1)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["list"])))
+    offset = 2
+    if include_discount:
+        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["disc"])))
+        offset += 1
+    all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["one_list"])))
+    offset += 1
+    if include_discount:
+        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["one_disc"])))
+    summary_rows.append(f'<row r="{all_summary_row}">{"".join(all_cells)}</row>')
+
+    sheet_rows = [
+        *top_rows,
+        f'<row r="{group_header_row}">{"".join(group_cells)}</row>',
+        f'<row r="{table_header_row}">{"".join(header_cells)}</row>',
+        *data_rows,
+        *summary_rows,
+        row_xml(note_row, ["Customer-facing view shows list prices only." if not include_discount else "Working view includes discount calculations."]),
+        row_xml(disclaimer_row, ["Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."]),
+    ]
+    widths = [16, 72, 18, 16] + (([12, 12, 18, 18, 18, 18] if include_discount else [12, 12, 18, 18, 18]) * len(environments)) + ([12, 20, 20, 20, 20] if include_discount else [12, 20, 20, 20])
+    cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
+    dimension = f"A1:{column_name(last_col)}{disclaimer_row}"
+    sheet_data = "".join(sheet_rows)
+    merge_refs = [f"A{group_header_row}:D{group_header_row}"]
+    for env_index in range(len(environments)):
+        start_col = base_cols + 1 + (env_index * env_width)
+        merge_refs.append(f"{column_name(start_col)}{group_header_row}:{column_name(start_col + env_width - 1)}{group_header_row}")
+    merge_refs.append(f"{column_name(total_col_start)}{group_header_row}:{column_name(total_col_start + total_width - 1)}{group_header_row}")
+    merges = f'<mergeCells count="{len(merge_refs)}">' + "".join(f'<mergeCell ref="{ref}"/>' for ref in merge_refs) + "</mergeCells>"
+    tab_selected = ' tabSelected="1"' if selected else ""
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="{dimension}"/>
+  <sheetViews><sheetView workbookViewId="0"{tab_selected}><pane ySplit="{table_header_row}" topLeftCell="A{data_start}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>{cols}</cols>
+  <sheetData>{sheet_data}</sheetData>
+  <autoFilter ref="A{table_header_row}:{column_name(last_col)}{data_end}"/>
+  {merges}
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>'''
+
+
 def build_sheet(
     rows: list[BomRow],
     discount: float,
@@ -430,6 +699,16 @@ def build_sheet(
     service_type: str,
     currency_style: int,
 ) -> str:
+    return build_wide_environment_sheet(
+        rows,
+        discount,
+        reference_label,
+        currency,
+        realm,
+        currency_style,
+        include_discount=True,
+    )
+
     today = date.today().strftime("%m/%d/%Y")
     normalized_discount = discount / 100 if discount > 1 else discount
     data_start = 7
@@ -562,6 +841,17 @@ def build_customer_sheet(
     realm: str,
     currency_style: int,
 ) -> str:
+    return build_wide_environment_sheet(
+        rows,
+        0,
+        reference_label,
+        currency,
+        realm,
+        currency_style,
+        include_discount=False,
+        selected=True,
+    )
+
     today = date.today().strftime("%m/%d/%Y")
     customer_rows = [row for row in rows if row.part]
     environments: list[str] = []

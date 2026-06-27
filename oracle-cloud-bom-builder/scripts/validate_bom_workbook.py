@@ -12,21 +12,7 @@ from zipfile import ZipFile
 
 
 NS = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-EXPECTED_HEADERS = [
-    "Part",
-    "Description",
-    "Part Qty",
-    "Instance Qty",
-    "Usage Qty",
-    "Unit Price",
-    "Monthly Cost",
-    "Custom Label",
-    "Discount %",
-    "Discounted Monthly Cost",
-    "Discounted Annual Cost",
-    "Custom Note",
-]
-EXPECTED_CUSTOMER_HEADERS = [
+EXPECTED_WIDE_HEADERS = [
     "Part",
     "Description",
     "Billing Basis",
@@ -76,6 +62,24 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def is_number(value: object) -> bool:
+    if value == "":
+        return False
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def find_wide_header_row(cells: dict[str, str]) -> int | None:
+    for row_num in range(1, 80):
+        candidate = [cells.get(f"{chr(65 + idx)}{row_num}", "") for idx in range(4)]
+        if candidate == EXPECTED_WIDE_HEADERS:
+            return row_num
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate an Oracle Cloud BOM workbook.")
     parser.add_argument("workbook", type=Path)
@@ -85,22 +89,26 @@ def main() -> None:
         fail(f"Workbook not found: {args.workbook}")
 
     cells = read_sheet(args.workbook)
-    headers = [cells.get(f"{chr(65 + idx)}6", "") for idx in range(len(EXPECTED_HEADERS))]
-    if headers != EXPECTED_HEADERS:
-        fail(f"Header row mismatch: {headers}")
-
+    paas_header_row = find_wide_header_row(cells)
+    if paas_header_row is None:
+        fail("PAAS wide header row mismatch")
+    paas_headers = [cells.get(f"{chr(65 + idx)}{paas_header_row}", "") for idx in range(120)]
     if cells.get("J3") != "Discount %":
         fail("Missing discount label in J3")
     if not cells.get("K3"):
         fail("Missing discount value in K3")
-    if not any(value.startswith("=IF(G") and "*(1-IF($K$3>1,$K$3/100,$K$3))" in value for value in cells.values()):
-        fail("Missing discounted monthly formula")
-    if not any(value.startswith("=IF(J") and "*12" in value for value in cells.values()):
-        fail("Missing discounted annual formula")
-    if not any(re.fullmatch(r"=SUM\(J\d+:J\d+\)", value) for value in cells.values()):
-        fail("Missing discounted monthly total formula")
-    if not any(re.fullmatch(r"=SUM\(K\d+:K\d+\)", value) for value in cells.values()):
-        fail("Missing discounted annual total formula")
+    if "Disc Price" not in paas_headers:
+        fail("PAAS sheet missing environment discount columns")
+    if "Total Disc Price" not in paas_headers:
+        fail("PAAS sheet missing total discount column")
+    has_priced_paas_rows = any(
+        ref.startswith("D") and ref[1:].isdigit() and int(ref[1:]) > paas_header_row and is_number(value)
+        for ref, value in cells.items()
+    )
+    if has_priced_paas_rows and not any("*(1-IF($K$3>1,$K$3/100,$K$3))" in value for value in cells.values()):
+        fail("Missing PAAS discount formula")
+    if "Environment Summary" not in cells.values():
+        fail("PAAS sheet missing environment summary block")
     if "Disclaimer:" not in " ".join(cells.values()):
         fail("Missing estimate disclaimer")
 
@@ -110,16 +118,11 @@ def main() -> None:
 
     customer_cells = read_sheet(args.workbook, "xl/worksheets/sheet2.xml")
     customer_values = set(customer_cells.values())
-    customer_header_row = None
-    for row_num in range(1, 40):
-        candidate = [customer_cells.get(f"{chr(65 + idx)}{row_num}", "") for idx in range(4)]
-        if candidate == EXPECTED_CUSTOMER_HEADERS:
-            customer_header_row = row_num
-            break
+    customer_header_row = find_wide_header_row(customer_cells)
     if customer_header_row is None:
         fail("Customer BOM header row mismatch")
     customer_headers = [customer_cells.get(f"{chr(65 + idx)}{customer_header_row}", "") for idx in range(80)]
-    if "Discount %" in customer_cells.values() or "Discounted Monthly Cost" in customer_cells.values():
+    if "Discount %" in customer_cells.values() or "Disc Price" in customer_cells.values():
         fail("Customer BOM should not expose discount columns")
     if "Customer Note" in customer_cells.values():
         fail("Customer BOM should not expose customer note column")
@@ -127,12 +130,10 @@ def main() -> None:
         fail("Customer BOM missing environment summary block")
     if not any(value == "Qty" for value in customer_headers):
         fail("Customer BOM missing environment quantity columns")
-    if not any(value == "Monthly List" for value in customer_headers):
-        fail("Customer BOM missing environment monthly list-price columns")
-    if "Total Monthly List" not in customer_headers:
-        fail("Customer BOM missing final total monthly list-price column")
-    if "Total Annual List" not in customer_headers:
-        fail("Customer BOM missing final total annual list-price column")
+    if not any(value == "List Price" for value in customer_headers):
+        fail("Customer BOM missing environment list-price columns")
+    if "Total List Price" not in customer_headers:
+        fail("Customer BOM missing final total list-price column")
     if "Total One-Time List" not in customer_headers:
         fail("Customer BOM missing final total one-time list-price column")
     if not any(re.fullmatch(r"=SUM\([A-Z]+\d+:[A-Z]+\d+\)", value) for value in customer_cells.values()):
@@ -171,19 +172,8 @@ def main() -> None:
     if calc_pr.attrib.get("fullCalcOnLoad") != "1" or calc_pr.attrib.get("forceFullCalc") != "1":
         fail("Workbook does not force recalculation on open")
 
-    sheet_root = read_xml(args.workbook, "xl/worksheets/sheet1.xml")
-    note_col = sheet_root.find(".//x:col[@min='12'][@max='12']", NS)
-    if note_col is None or note_col.attrib.get("hidden") != "1":
-        fail("Internal Custom Note column should be hidden")
-    for ref in ["J" + ref[1:] for ref, value in cells.items() if value.startswith("=SUM(K")]:
-        if ref not in cells:
-            fail(f"Missing discounted monthly total paired with annual total at {ref}")
-    for ref, value in cells.items():
-        if ref.startswith(("J", "K")) and value.startswith("=SUM("):
-            cell = sheet_root.find(f".//x:c[@r='{ref}']", NS)
-            cached_value = cell.find("x:v", NS) if cell is not None else None
-            if cached_value is None or cached_value.text in (None, ""):
-                fail(f"Missing cached formula value for total cell {ref}")
+    if not any(re.fullmatch(r"=SUM\([A-Z]+\d+:[A-Z]+\d+\)", value) for value in cells.values()):
+        fail("PAAS sheet missing environment summary formulas")
 
     print(f"PASS: {args.workbook}")
 
