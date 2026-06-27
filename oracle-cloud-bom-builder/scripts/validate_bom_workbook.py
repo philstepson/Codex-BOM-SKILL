@@ -156,6 +156,8 @@ def main() -> None:
         content_types_text = workbook.read("[Content_Types].xml").decode("utf-8")
     if 'name="Customer BOM"' not in workbook_xml_text:
         fail("Workbook does not register the Customer BOM sheet")
+    if 'activeTab="1"' not in workbook_xml_text:
+        fail("Workbook does not open on the Customer BOM sheet")
     if 'Target="worksheets/sheet2.xml"' not in rels_xml_text:
         fail("Workbook relationships do not include the Customer BOM sheet")
     if 'PartName="/xl/worksheets/sheet2.xml"' not in content_types_text:
@@ -170,6 +172,9 @@ def main() -> None:
         fail("Workbook does not force recalculation on open")
 
     sheet_root = read_xml(args.workbook, "xl/worksheets/sheet1.xml")
+    note_col = sheet_root.find(".//x:col[@min='12'][@max='12']", NS)
+    if note_col is None or note_col.attrib.get("hidden") != "1":
+        fail("Internal Custom Note column should be hidden")
     for ref in ["J" + ref[1:] for ref, value in cells.items() if value.startswith("=SUM(K")]:
         if ref not in cells:
             fail(f"Missing discounted monthly total paired with annual total at {ref}")

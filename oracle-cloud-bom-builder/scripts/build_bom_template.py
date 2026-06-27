@@ -25,6 +25,16 @@ DEFAULT_OUTPUT = ROOT / "outputs" / "sample-oracle-cloud-bom.xlsx"
 CURRENCY_NUM_FMT_ID = 164
 CURRENCY_NUM_FMT_CODE = '$#,##0'
 PERCENT_STYLE_ID = 9
+ENVIRONMENT_FILL_COLORS = [
+    "C94938",
+    "9C918A",
+    "6D8F8D",
+    "2F5D6B",
+    "000000",
+    "6F6F6F",
+]
+SUMMARY_FILL_COLOR = "D9E2F3"
+DETAIL_FILL_COLOR = "305496"
 
 
 def discount_formula() -> str:
@@ -245,6 +255,40 @@ def workbook_styles_xml(template: Path) -> bytes:
             'xfId="0" applyNumberFormat="1"/>'
         )
         styles = styles.replace("</cellXfs>", f"{currency_xf}</cellXfs>", 1)
+
+    if "customerBomStyleFills" not in styles:
+        fill_colors = [SUMMARY_FILL_COLOR, DETAIL_FILL_COLOR, *ENVIRONMENT_FILL_COLORS]
+        fill_xml = "".join(
+            f'<fill><patternFill patternType="solid"><fgColor rgb="FF{color}"/><bgColor indexed="64"/></patternFill></fill>'
+            for color in fill_colors
+        )
+        styles = styles.replace("</fills>", f"{fill_xml}</fills>", 1)
+        styles = re.sub(
+            r'<fills count="(\d+)">',
+            lambda match: f'<fills count="{int(match.group(1)) + len(fill_colors)}">',
+            styles,
+            count=1,
+        )
+        existing_fill_count = 2
+        summary_fill_id = existing_fill_count
+        detail_fill_id = existing_fill_count + 1
+        env_fill_start = existing_fill_count + 2
+        customer_xfs = [
+            f'<xf numFmtId="0" fontId="3" fillId="{summary_fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+            f'<xf numFmtId="0" fontId="3" fillId="{detail_fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+        ]
+        for fill_id in range(env_fill_start, env_fill_start + len(ENVIRONMENT_FILL_COLORS)):
+            customer_xfs.append(
+                f'<xf numFmtId="0" fontId="3" fillId="{fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
+            )
+        styles = re.sub(
+            r'<cellXfs count="(\d+)">',
+            lambda match: f'<cellXfs count="{int(match.group(1)) + len(customer_xfs)}">',
+            styles,
+            count=1,
+        )
+        styles = styles.replace("</cellXfs>", f"{''.join(customer_xfs)}</cellXfs>", 1)
+        styles = styles.replace("</styleSheet>", "<!-- customerBomStyleFills --></styleSheet>", 1)
 
     return styles.encode("utf-8")
 
@@ -491,10 +535,11 @@ def build_sheet(
         ]
     )
 
-    cols = "".join(
-        f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>'
-        for idx, width in enumerate([16, 72, 12, 14, 12, 12, 14, 20, 12, 22, 22, 28], start=1)
-    )
+    col_xml = []
+    for idx, width in enumerate([16, 72, 12, 14, 12, 12, 14, 20, 12, 22, 22, 28], start=1):
+        hidden_attr = ' hidden="1"' if idx == 12 else ""
+        col_xml.append(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"{hidden_attr}/>')
+    cols = "".join(col_xml)
     dimension = f"A1:L{disclaimer_row}"
     sheet_data = "".join(sheet_rows)
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -554,6 +599,10 @@ def build_customer_sheet(
     total_col_start = 5 + (len(environments) * 5)
     last_col = total_col_start + 3
     disclaimer_row = data_end + 4
+    summary_style = currency_style + 1
+    detail_style = currency_style + 2
+    env_style_start = currency_style + 3
+    total_style = env_style_start + len(ENVIRONMENT_FILL_COLORS) - 1
 
     env_totals = {
         environment: {"monthly": 0.0, "annual": 0.0, "one_time": 0.0}
@@ -562,38 +611,39 @@ def build_customer_sheet(
     all_totals = {"monthly": 0.0, "annual": 0.0, "one_time": 0.0}
 
     group_cells = [
-        cell(f"A{group_header_row}", "SKU Detail"),
-        cell(f"B{group_header_row}", ""),
-        cell(f"C{group_header_row}", ""),
-        cell(f"D{group_header_row}", ""),
+        cell(f"A{group_header_row}", "SKU Detail", style=detail_style),
+        cell(f"B{group_header_row}", "", style=detail_style),
+        cell(f"C{group_header_row}", "", style=detail_style),
+        cell(f"D{group_header_row}", "", style=detail_style),
     ]
     header_cells = [
-        cell(f"A{table_header_row}", "Part"),
-        cell(f"B{table_header_row}", "Description"),
-        cell(f"C{table_header_row}", "Billing Basis"),
-        cell(f"D{table_header_row}", "Unit List Price"),
+        cell(f"A{table_header_row}", "Part", style=detail_style),
+        cell(f"B{table_header_row}", "Description", style=detail_style),
+        cell(f"C{table_header_row}", "Billing Basis", style=detail_style),
+        cell(f"D{table_header_row}", "Unit List Price", style=detail_style),
     ]
     for env_index, environment in enumerate(environments):
         start_col = 5 + (env_index * 5)
-        group_cells.append(cell(f"{column_name(start_col)}{group_header_row}", environment))
-        group_cells.extend(cell(f"{column_name(start_col + offset)}{group_header_row}", "") for offset in range(1, 5))
+        env_style = env_style_start + (env_index % (len(ENVIRONMENT_FILL_COLORS) - 1))
+        group_cells.append(cell(f"{column_name(start_col)}{group_header_row}", environment, style=env_style))
+        group_cells.extend(cell(f"{column_name(start_col + offset)}{group_header_row}", "", style=env_style) for offset in range(1, 5))
         header_cells.extend(
             [
-                cell(f"{column_name(start_col)}{table_header_row}", "Qty"),
-                cell(f"{column_name(start_col + 1)}{table_header_row}", "Hrs"),
-                cell(f"{column_name(start_col + 2)}{table_header_row}", "Monthly List"),
-                cell(f"{column_name(start_col + 3)}{table_header_row}", "Annual List"),
-                cell(f"{column_name(start_col + 4)}{table_header_row}", "One-Time List"),
+                cell(f"{column_name(start_col)}{table_header_row}", "Qty", style=env_style),
+                cell(f"{column_name(start_col + 1)}{table_header_row}", "Hrs", style=env_style),
+                cell(f"{column_name(start_col + 2)}{table_header_row}", "Monthly List", style=env_style),
+                cell(f"{column_name(start_col + 3)}{table_header_row}", "Annual List", style=env_style),
+                cell(f"{column_name(start_col + 4)}{table_header_row}", "One-Time List", style=env_style),
             ]
         )
-    group_cells.append(cell(f"{column_name(total_col_start)}{group_header_row}", "All Environments"))
-    group_cells.extend(cell(f"{column_name(total_col_start + offset)}{group_header_row}", "") for offset in range(1, 4))
+    group_cells.append(cell(f"{column_name(total_col_start)}{group_header_row}", "All Environments", style=total_style))
+    group_cells.extend(cell(f"{column_name(total_col_start + offset)}{group_header_row}", "", style=total_style) for offset in range(1, 4))
     header_cells.extend(
         [
-            cell(f"{column_name(total_col_start)}{table_header_row}", "Total Qty"),
-            cell(f"{column_name(total_col_start + 1)}{table_header_row}", "Total Monthly List"),
-            cell(f"{column_name(total_col_start + 2)}{table_header_row}", "Total Annual List"),
-            cell(f"{column_name(total_col_start + 3)}{table_header_row}", "Total One-Time List"),
+            cell(f"{column_name(total_col_start)}{table_header_row}", "Total Qty", style=total_style),
+            cell(f"{column_name(total_col_start + 1)}{table_header_row}", "Total Monthly List", style=total_style),
+            cell(f"{column_name(total_col_start + 2)}{table_header_row}", "Total Annual List", style=total_style),
+            cell(f"{column_name(total_col_start + 3)}{table_header_row}", "Total One-Time List", style=total_style),
         ]
     )
 
@@ -712,10 +762,10 @@ def build_customer_sheet(
 
     top_summary_rows: list[str] = [
         f'<row r="{summary_header_row}">'
-        f'{cell(f"A{summary_header_row}", "Environment Summary")}'
-        f'{cell(f"B{summary_header_row}", "Monthly List")}'
-        f'{cell(f"C{summary_header_row}", "Annual List")}'
-        f'{cell(f"D{summary_header_row}", "One-Time List")}'
+        f'{cell(f"A{summary_header_row}", "Environment Summary", style=summary_style)}'
+        f'{cell(f"B{summary_header_row}", "Monthly List", style=summary_style)}'
+        f'{cell(f"C{summary_header_row}", "Annual List", style=summary_style)}'
+        f'{cell(f"D{summary_header_row}", "One-Time List", style=summary_style)}'
         "</row>"
     ]
     for env_index, environment in enumerate(environments):
@@ -774,7 +824,7 @@ def build_customer_sheet(
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <dimension ref="{dimension}"/>
-  <sheetViews><sheetView workbookViewId="0"><pane ySplit="{table_header_row}" topLeftCell="A{data_start}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetViews><sheetView workbookViewId="0" tabSelected="1"><pane ySplit="{table_header_row}" topLeftCell="A{data_start}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>{cols}</cols>
   <sheetData>{sheet_data}</sheetData>
@@ -816,6 +866,24 @@ def workbook_with_customer_sheet_xml(template: Path) -> bytes:
     if 'name="Customer BOM"' not in workbook_xml_text:
         customer_sheet = '<sheet sheetId="2" name="Customer BOM" state="visible" r:id="rId5"/>'
         workbook_xml_text = workbook_xml_text.replace("</sheets>", f"{customer_sheet}</sheets>", 1)
+    if "<bookViews>" not in workbook_xml_text:
+        if re.search(r"<workbookPr[^>]*/>", workbook_xml_text):
+            workbook_xml_text = re.sub(
+                r"(<workbookPr[^>]*/>)",
+                r'\1<bookViews><workbookView activeTab="1" firstSheet="1"/></bookViews>',
+                workbook_xml_text,
+                count=1,
+            )
+        else:
+            workbook_xml_text = workbook_xml_text.replace(
+                "</workbookPr>",
+                '</workbookPr><bookViews><workbookView activeTab="1" firstSheet="1"/></bookViews>',
+                1,
+            )
+    elif "activeTab=" not in workbook_xml_text:
+        workbook_xml_text = workbook_xml_text.replace("<workbookView", '<workbookView activeTab="1" firstSheet="1"', 1)
+    else:
+        workbook_xml_text = re.sub(r'activeTab="\d+"', 'activeTab="1"', workbook_xml_text, count=1)
     return workbook_xml_text.encode("utf-8")
 
 
