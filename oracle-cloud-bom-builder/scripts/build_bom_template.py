@@ -778,8 +778,8 @@ def build_customer_sheet(
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>{cols}</cols>
   <sheetData>{sheet_data}</sheetData>
-  {merges}
   <autoFilter ref="A{table_header_row}:{column_name(last_col)}{data_end}"/>
+  {merges}
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 </worksheet>'''
 

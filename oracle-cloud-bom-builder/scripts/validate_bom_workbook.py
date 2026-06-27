@@ -61,6 +61,11 @@ def read_xml(path: Path, workbook_part: str) -> ET.Element:
         return ET.fromstring(workbook.read(workbook_part))
 
 
+def read_text(path: Path, workbook_part: str) -> str:
+    with ZipFile(path) as workbook:
+        return workbook.read(workbook_part).decode("utf-8")
+
+
 def workbook_parts(path: Path) -> set[str]:
     with ZipFile(path) as workbook:
         return set(workbook.namelist())
@@ -134,6 +139,14 @@ def main() -> None:
         fail("Customer BOM missing environment summary formulas")
     if "All Environments" not in customer_cells.values():
         fail("Customer BOM missing all-environments total row")
+    sheet2_xml = read_text(args.workbook, "xl/worksheets/sheet2.xml")
+    auto_filter_index = sheet2_xml.find("<autoFilter")
+    merge_cells_index = sheet2_xml.find("<mergeCells")
+    page_margins_index = sheet2_xml.find("<pageMargins")
+    if merge_cells_index != -1 and auto_filter_index != -1 and merge_cells_index < auto_filter_index:
+        fail("Customer BOM XML has mergeCells before autoFilter; Excel may repair sheet2.xml")
+    if merge_cells_index != -1 and page_margins_index != -1 and page_margins_index < merge_cells_index:
+        fail("Customer BOM XML has pageMargins before mergeCells; Excel may repair sheet2.xml")
 
     workbook_root = read_xml(args.workbook, "xl/workbook.xml")
     workbook_xml_text = ""
