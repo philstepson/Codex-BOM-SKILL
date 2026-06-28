@@ -17,6 +17,8 @@ Use the skill when you need:
 - A standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, or Database@AWS BOM based on Oracle pricing calculator rows.
 - Exadata Cloud@Customer BOM rows that include infrastructure resources not fully covered by the calculator.
 - Explicit SKU additions from the Oracle price list, including non-product service SKUs such as installation or activation services.
+- A configured-system summary sheet that explains requested and configured Exadata capacity.
+- An optional Draw.io-compatible block diagram for proposal discussion.
 
 ## Inputs The Skill Needs
 
@@ -46,7 +48,7 @@ Legacy or sample Excel BOMs are useful as layout references, but their embedded 
 
 For customer delivery, the important sheet is a customer-facing BOM. It should show each SKU once, with separate column blocks for each environment. A SKU that applies to Production and DR but not Non-Prod should have Production and DR values populated and Non-Prod values blank. The sheet should include grouped environment headers, summary rows under the SKU rows, and final all-environment totals. Hidden helper sheets from the classic sample are optional. When you ask for a customer version showing list price only, the customer-facing sheet should not show discount calculations or verbose source notes.
 
-A future enhancement is a configured-system summary that describes the resulting platform in resource terms, not just price terms. For Exadata, that means requested ECPUs, configured and available processor capacity, memory, usable storage, local storage limits, and relevant I/O or bandwidth limits. A simple Draw.io block diagram could also show the configured system and environment layout for customer discussion.
+The generated workbook includes a configured-system summary that describes the resulting platform in resource terms, not just price terms. For Exadata, that means requested ECPUs, configured processor capacity, usable database cores, VM memory, usable storage, XRMEM, flash cache, VM cluster limits, redundancy, and license model. The summary uses a vertical layout with one environment heading followed by `Description` and `Value` rows. A simple Draw.io block diagram can also show the configured system and environment layout for customer discussion.
 
 ## Standard Exadata And Database@ Inputs
 
@@ -114,6 +116,16 @@ Before using eSource, decide whether the pricing calculator can produce the need
 
 Do not treat pricing embedded in a historical Excel BOM sample as current. Use those workbooks for format, environment layout, formulas, and proposal flow only unless their pricing sheets have been refreshed and date-verified for the active BOM.
 
+Use the pricing refresh preflight before finalizing a BOM that depends on calculator exports or eSource PDF rows:
+
+```bash
+python3 scripts/check_pricing_refresh.py \
+  --input-csv inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv \
+  --current-esource-date "June 11, 2026"
+```
+
+The script checks the eSource cache metadata, confirms the cached PDF exists, compares the authenticated live eSource document date when supplied, scans input CSV source notes for calculator and eSource usage, and warns when standard Dedicated/Database@ Exadata rows appear to rely on eSource instead of calculator exports.
+
 ## Explicit SKU Additions
 
 You can ask the skill to add a specific SKU to a BOM. This is useful for price-list items that may not appear as normal product rows in the pricing calculator, such as implementation, installation, activation, or other service SKUs.
@@ -167,6 +179,17 @@ python3 scripts/build_bom_template.py \
   --output outputs/my-oracle-cloud-bom.xlsx
 ```
 
+With optional Draw.io output:
+
+```bash
+python3 scripts/build_bom_template.py \
+  --input-csv /tmp/estimator.csv \
+  --discount 15 \
+  --reference-label "My Oracle Cloud BOM" \
+  --output outputs/my-oracle-cloud-bom.xlsx \
+  --diagram-output outputs/my-oracle-cloud-bom.drawio
+```
+
 With supplemental PDF pricing:
 
 ```bash
@@ -185,12 +208,15 @@ The generated workbook includes:
 
 - A primary `PAAS` worksheet by default, using the same wide environment-block layout as the customer view and adding discount columns.
 - A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, annual recurring list price, and one-time list-price blocks.
+- A visible `System Summary` worksheet that groups configured-system capacity by environment in vertical `Description` / `Value` sections.
 - A single editable discount input in `K3`.
 - Discounted list-price columns on the `PAAS` working sheet.
 - Environment summary rows below the SKU rows.
 - Cached formula values for discounted row totals and grand totals.
 - Workbook calculation settings that force automatic recalculation when the file opens.
 - Estimate disclaimer text.
+
+When `--diagram-output` is supplied, the builder writes a Draw.io-compatible `.drawio` file with proposal-level blocks for each environment, database servers, storage servers, VM clusters, and a source note.
 
 The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
 
@@ -222,9 +248,12 @@ The current repo output includes these generated BOMs:
 
 - `outputs/StandardC@C.xlsx`: Exadata Cloud@Customer X11M Base rack with 3 High Capacity storage servers, 64 BYOL ECPUs, and one-time `B91390` installation and activation included in discounted annual cost.
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M calculator-backed quarter-rack baseline with 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
+- `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx`: Multi-environment proposal workbook with Production, Disaster Recovery, and Non-Prod environments.
+- Optional Draw.io outputs can be generated with matching basenames and `.drawio` extensions.
 
 The source CSVs used to regenerate these are:
 
+- `inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv` for the multi-environment output.
 - `tmp/StandardC@C-b91390.csv` for the current Cloud@Customer output.
 - `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv` for the OCI Dedicated Exadata output.
 
@@ -242,7 +271,7 @@ Expected success output:
 PASS: outputs/my-oracle-cloud-bom.xlsx
 ```
 
-The validator checks table structure, discount formulas, total formulas, customer-facing list-price sheet structure, estimate disclaimer text, cached total values, and workbook recalculation settings.
+The validator checks table structure, discount formulas, total formulas, customer-facing list-price sheet structure, the vertical `System Summary` sheet, estimate disclaimer text, cached total values, and workbook recalculation settings.
 
 ## Practical Workflow
 

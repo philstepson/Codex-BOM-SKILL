@@ -22,6 +22,9 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
   - `Disc Price`
   - `One-Time Disc`
 - Recurring list-price columns are annualized. One-time service rows remain separate.
+- Generated colored headers and summary cells use bold white text, thin borders, whole-dollar currency formats, and emphasized subtotal rows for readability.
+- Generated workbooks include a visible `System Summary` worksheet. It uses a vertical layout: each environment has its own heading, followed by `Description` and `Value` rows for configured-system characteristics.
+- `scripts/build_bom_template.py` can optionally emit a Draw.io-compatible `.drawio` block diagram with `--diagram-output`.
 
 ## Current Generated Outputs
 
@@ -29,9 +32,13 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
   - Production: Standard C@C, 64 BYOL ECPUs.
   - Disaster Recovery: Standard C@C with 20% ECPU reduction, rounded from 51.2 to 52 BYOL ECPUs.
   - Non-Prod: OCI Dedicated Exadata X11M 64 BYOL ECPU BOM.
+  - Optional paired diagram: `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.drawio`.
 - `outputs/StandardC@C.xlsx`
+- `outputs/StandardC@C.drawio`
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`
+- `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.drawio`
 - `outputs/sample-oracle-cloud-bom.xlsx`
+- `outputs/sample-oracle-cloud-bom.drawio`
 
 ## Source Inputs
 
@@ -45,11 +52,13 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 - Use current/date-verified eSource PDF only for Cloud@Customer gaps or explicit price-list-only SKUs.
 - Explicit SKU additions, such as `B91390`, must be looked up by exact SKU in the verified price source.
 - One-time service SKUs should not contribute to recurring monthly cost but should appear in one-time list/discount totals.
+- Run `scripts/check_pricing_refresh.py` before finalizing BOMs that depend on calculator exports or eSource PDF rows. Provide `--current-esource-date` from the authenticated eSource PDF so the script can compare the live document date with cache metadata.
 
 ## Validation Commands
 
 ```bash
 .venv/bin/python -m compileall scripts
+.venv/bin/python scripts/check_pricing_refresh.py --input-csv inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv --current-esource-date "June 11, 2026"
 .venv/bin/python scripts/validate_bom_workbook.py outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx
 .venv/bin/python scripts/validate_bom_workbook.py outputs/sample-oracle-cloud-bom.xlsx
 .venv/bin/python scripts/validate_bom_workbook.py outputs/StandardC@C.xlsx
@@ -63,10 +72,12 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 - `scripts/validate_bom_workbook.py` checks this ordering because Excel previously repaired `sheet2.xml` when the order was wrong.
 - `workbook.xml` sets `Customer BOM` as the active tab.
 - The generated styles include custom fills for environment block headers.
+- `scripts/validate_bom_workbook.py` now also checks the `System Summary` sheet, its vertical environment sections, and workbook registration for sheet 3.
+- `scripts/check_pricing_refresh.py` is a preflight, not a live downloader. Human eSource authentication and live document-date reading still happen in the browser session.
 
-## Possible Next Enhancements
+## Completed Enhancements
 
-- Improve workbook visual polish further: borders, number formats, and subtotal emphasis.
-- Add a configured-system summary sheet for processor, memory, storage, and performance capacity.
-- Add optional Draw.io-compatible block diagram output.
-- Add current pricing refresh automation around calculator export and eSource date verification.
+- Improved workbook visual polish: borders, number formats, high-contrast headers, and subtotal emphasis.
+- Added configured-system summary sheet for processor, memory, storage, and performance capacity.
+- Added optional Draw.io-compatible block diagram output.
+- Added pricing refresh preflight around calculator export and eSource date verification.

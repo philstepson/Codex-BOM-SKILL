@@ -23,6 +23,16 @@ Before each pricing run:
 
 If the current eSource date cannot be read, do not silently reuse the cached PDF. Ask the user whether to proceed from the cached PDF and label the output as using an unverified cached source.
 
+Use the repository preflight script to enforce this check when preparing a BOM:
+
+```bash
+python3 scripts/check_pricing_refresh.py \
+  --input-csv inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv \
+  --current-esource-date "June 11, 2026"
+```
+
+`--current-esource-date` should be the date read from the authenticated eSource PDF in the browser. If the live date is newer than the cache metadata, refresh the PDF cache before extracting or reusing any supplemental rows.
+
 ## Recommended Local Layout
 
 Store cached source files outside committed skill source. Paths below are relative to the `oracle-cloud-bom-builder` skill directory:

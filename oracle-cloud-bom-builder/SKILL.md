@@ -28,7 +28,8 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
 9. Preserve source assumptions and add clear notes that prices are estimates unless the user provides formal quote data.
 10. When the user gives a specific SKU to add, treat that SKU as an explicit BOM row request. Look up the exact SKU in the current approved pricing source before pricing it; for price-list-only service SKUs, use the authenticated eSource PDF or a date-verified persisted PDF cache. Preserve the price-list description, SKU, quantity assumptions, billing basis, source document date, and any user-supplied label in `Custom Note`.
 11. Use eSource only after the calculator path is unavailable or incomplete, when the request is Exadata Cloud@Customer, or when the user gives a SKU that must be found in the price-list PDF. Ask the user to authenticate to eSource when needed, then verify the managed Oracle eSource price-list PDF cache before extracting supplemental prices. Read `references/esource-price-list-cache.md` before using cached PDF pricing.
-12. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
+12. For BOMs that depend on calculator exports or eSource rows, run `scripts/check_pricing_refresh.py` before finalizing. Provide `--current-esource-date` from the authenticated eSource PDF when eSource rows are present.
+13. Verify the workbook formulas and formatting before delivering the final `.xlsx`.
 
 ## Workbook Format
 
@@ -40,7 +41,7 @@ When the user asks for the preferred classic Excel BOM format, a customer propos
 
 For proposal-style workbooks, include a customer-facing BOM view that shows one row per unique SKU or priced line item, environment-specific column blocks for quantities/hours/list prices, summary rows under the SKU rows for each environment, and final all-environment totals. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic on the `PAAS` working sheet.
 
-As a future enhancement for configured systems, the skill may create an optional system summary that describes requested, configured, and available processor, memory, and storage resources using the relevant datasheet reference plus BOM inputs. A simple Draw.io-compatible block diagram may also be produced when requested, but it is not required for normal BOM generation.
+For configured systems, generated workbooks include a `System Summary` sheet that describes requested and configured processor, memory, storage, and VM-cluster resources using the relevant datasheet reference plus BOM inputs. The summary uses vertical environment sections with `Description` and `Value` columns. A simple Draw.io-compatible block diagram may also be produced with `--diagram-output` when requested, but it is not required for normal BOM generation.
 
 Use `scripts/build_bom_template.py` when a deterministic starter workbook is appropriate. It can build from its embedded sample data or from a CSV with Oracle estimator headers.
 
@@ -49,6 +50,8 @@ After generating a workbook with the script, run `scripts/validate_bom_workbook.
 The default workbook should include:
 
 - A primary `PAAS` sheet unless the user specifies another service type. For multi-environment BOMs, this should use the same wide environment-block layout as `Customer BOM` and add discounted price columns.
+- A visible `Customer BOM` sheet with list-price-only environment blocks.
+- A visible `System Summary` sheet with vertical environment sections for configured capacity.
 - A visible discount input near the top of the primary sheet or on an `Inputs`/`Summary` sheet.
 - Additional columns for discounted monthly and annual cost.
 - A monthly and annual total section showing list price, discount percentage, discounted monthly cost, and discounted annual cost.
@@ -94,6 +97,7 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 - If the user supplies a SKU that is not present in the calculator export, search the verified current eSource price-list PDF by exact SKU first, then by normalized description only if the SKU search fails. Do not substitute a similarly named row without calling out the mismatch and asking for confirmation.
 - The current supplemental PDF URL is `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`; open it through browser authentication when needed.
 - A local PDF cache is allowed for repeatability, but it must be refreshed from eSource before each pricing run when the eSource document date is newer than the cached document date. Follow `references/esource-price-list-cache.md`.
+- Run `scripts/check_pricing_refresh.py` as a preflight for calculator/eSource source checks. The script verifies cache metadata, compares a supplied live eSource document date, scans CSV source notes, and warns when standard Dedicated/Database@ Exadata rows appear to rely on eSource instead of calculator exports.
 - Extract only the rows needed for the BOM from the authenticated PDF into a temporary runtime CSV, then pass that CSV to `scripts/build_bom_template.py` with `--supplemental-pricing-csv`.
 - Capture the document date from the PDF front page and pass it with `--supplemental-source-date`; when supplemental PDF pricing is used, add a footnote in `Custom Note` identifying Oracle eSource PDF pricing and that document date.
 - For one-time or non-metered service SKUs, ask for quantity if it is not obvious. Default to quantity `1` only when the user asks to add a single service and no other quantity context is present. Preserve the price-list billing basis in `Custom Note` so one-time service charges are not confused with hourly usage.
@@ -119,6 +123,7 @@ Before finalizing the workbook, confirm:
 - One-time service rows are excluded from recurring monthly cost and included once in discounted annual cost when requested.
 - Original list-price values remain visible.
 - Customer-facing proposal views show all SKUs, quantities, and list prices, and omit discounts when the user asks for list-price-only customer output.
+- `System Summary` shows requested ECPUs separately from configured platform capacity, and groups capacity characteristics by environment.
 - Workbook is not protected or locked unless the user asks for protection.
 - Notes identify assumptions, missing prices, and non-binding estimate status.
 - Optional configured-system summaries distinguish requested resources from configured infrastructure capacity and workload-available capacity.
@@ -156,7 +161,20 @@ python3 scripts/build_bom_template.py \
   --output outputs/sample-oracle-cloud-bom.xlsx
 ```
 
+Example with optional Draw.io output:
+
+```bash
+python3 scripts/build_bom_template.py \
+  --input-csv /tmp/estimator.csv \
+  --discount 15 \
+  --reference-label "My Oracle Cloud BOM" \
+  --output outputs/my-oracle-cloud-bom.xlsx \
+  --diagram-output outputs/my-oracle-cloud-bom.drawio
+```
+
 `scripts/validate_bom_workbook.py` checks the generated workbook for the expected Oracle estimator headers, discount input, discount formulas, totals, and disclaimer.
+
+`scripts/check_pricing_refresh.py` checks eSource cache metadata, the cached PDF, live document date supplied from the authenticated browser, source notes in CSV input rows, and recent calculator exports in `~/Downloads`.
 
 ## User Follow-Up Questions
 

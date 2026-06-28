@@ -33,7 +33,7 @@ ENVIRONMENT_FILL_COLORS = [
     "000000",
     "6F6F6F",
 ]
-SUMMARY_FILL_COLOR = "D9E2F3"
+SUMMARY_FILL_COLOR = "1F4E79"
 DETAIL_FILL_COLOR = "305496"
 
 
@@ -232,7 +232,7 @@ def currency_style_id(template: Path) -> int:
 
 
 def workbook_styles_xml(template: Path) -> bytes:
-    """Return template styles plus a whole-dollar currency style."""
+    """Return template styles plus generated BOM presentation styles."""
     with ZipFile(template, "r") as workbook:
         styles = workbook.read("xl/styles.xml").decode("utf-8")
 
@@ -243,6 +243,41 @@ def workbook_styles_xml(template: Path) -> bytes:
         )
         styles = styles.replace("<fonts ", f"{num_fmt}<fonts ", 1)
 
+    thin_border_id = 0
+    if "customerBomStyleFills" not in styles:
+        font_match = re.search(r'<fonts count="(\d+)"', styles)
+        if not font_match:
+            raise ValueError(f"Unable to find fonts count in template styles: {template}")
+        white_bold_font_id = int(font_match.group(1))
+        white_bold_font = '<font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font>'
+        styles = styles.replace("</fonts>", f"{white_bold_font}</fonts>", 1)
+        styles = re.sub(
+            r'<fonts count="(\d+)"',
+            lambda match: f'<fonts count="{int(match.group(1)) + 1}"',
+            styles,
+            count=1,
+        )
+        border_match = re.search(r'<borders count="(\d+)">', styles)
+        if not border_match:
+            raise ValueError(f"Unable to find borders count in template styles: {template}")
+        thin_border_id = int(border_match.group(1))
+        thin_border = (
+            '<border>'
+            '<left style="thin"><color rgb="FFD9E2F3"/></left>'
+            '<right style="thin"><color rgb="FFD9E2F3"/></right>'
+            '<top style="thin"><color rgb="FFD9E2F3"/></top>'
+            '<bottom style="thin"><color rgb="FFD9E2F3"/></bottom>'
+            '<diagonal/>'
+            '</border>'
+        )
+        styles = styles.replace("</borders>", f"{thin_border}</borders>", 1)
+        styles = re.sub(
+            r'<borders count="(\d+)">',
+            lambda match: f'<borders count="{int(match.group(1)) + 1}">',
+            styles,
+            count=1,
+        )
+
     if f'numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="0"' not in styles:
         styles = re.sub(
             r'<cellXfs count="(\d+)">',
@@ -251,8 +286,8 @@ def workbook_styles_xml(template: Path) -> bytes:
             count=1,
         )
         currency_xf = (
-            f'<xf numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="0" fillId="0" borderId="0" '
-            'xfId="0" applyNumberFormat="1"/>'
+            f'<xf numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="0" fillId="0" borderId="{thin_border_id}" '
+            'xfId="0" applyNumberFormat="1" applyBorder="1"/>'
         )
         styles = styles.replace("</cellXfs>", f"{currency_xf}</cellXfs>", 1)
 
@@ -274,13 +309,19 @@ def workbook_styles_xml(template: Path) -> bytes:
         detail_fill_id = existing_fill_count + 1
         env_fill_start = existing_fill_count + 2
         customer_xfs = [
-            f'<xf numFmtId="0" fontId="3" fillId="{summary_fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-            f'<xf numFmtId="0" fontId="3" fillId="{detail_fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+            f'<xf numFmtId="0" fontId="{white_bold_font_id}" fillId="{summary_fill_id}" borderId="{thin_border_id}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+            f'<xf numFmtId="0" fontId="{white_bold_font_id}" fillId="{detail_fill_id}" borderId="{thin_border_id}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
         ]
         for fill_id in range(env_fill_start, env_fill_start + len(ENVIRONMENT_FILL_COLORS)):
             customer_xfs.append(
-                f'<xf numFmtId="0" fontId="3" fillId="{fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
+                f'<xf numFmtId="0" fontId="{white_bold_font_id}" fillId="{fill_id}" borderId="{thin_border_id}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
             )
+        customer_xfs.extend(
+            [
+                f'<xf numFmtId="{CURRENCY_NUM_FMT_ID}" fontId="{white_bold_font_id}" fillId="{summary_fill_id}" borderId="{thin_border_id}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>',
+                f'<xf numFmtId="0" fontId="0" fillId="0" borderId="{thin_border_id}" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>',
+            ]
+        )
         styles = re.sub(
             r'<cellXfs count="(\d+)">',
             lambda match: f'<cellXfs count="{int(match.group(1)) + len(customer_xfs)}">',
@@ -462,9 +503,11 @@ def build_wide_environment_sheet(
     detail_style = currency_style + 2
     env_style_start = currency_style + 3
     total_style = env_style_start + len(ENVIRONMENT_FILL_COLORS) - 1
+    summary_currency_style = total_style + 1
+    body_style = summary_currency_style + 1
     base_cols = 4
-    env_width = 6 if include_discount else 5
-    total_width = 5 if include_discount else 4
+    env_width = 6 if include_discount else 4
+    total_width = 5 if include_discount else 3
     group_header_row = 5
     table_header_row = 6
     data_start = 7
@@ -525,10 +568,10 @@ def build_wide_environment_sheet(
         row_num = data_start + offset
         part, description, unit_price, basis = key
         cells = [
-            cell(f"A{row_num}", part),
-            cell(f"B{row_num}", description),
-            cell(f"C{row_num}", basis),
-            cell(f"D{row_num}", unit_price),
+            cell(f"A{row_num}", part, style=body_style),
+            cell(f"B{row_num}", description, style=body_style),
+            cell(f"C{row_num}", basis, style=body_style),
+            cell(f"D{row_num}", unit_price, style=body_style),
         ]
         qty_cols: list[str] = []
         list_cols: list[str] = []
@@ -556,7 +599,7 @@ def build_wide_environment_sheet(
 
             if env_row is None:
                 empty_count = env_width
-                cells.extend(cell(f"{column_name(start_col + i)}{row_num}", "", style=currency_style if i >= 2 else None) for i in range(empty_count))
+                cells.extend(cell(f"{column_name(start_col + i)}{row_num}", "", style=currency_style if i >= 2 else body_style) for i in range(empty_count))
                 continue
 
             quantity = row_customer_quantity(env_row)
@@ -596,8 +639,8 @@ def build_wide_environment_sheet(
             env_totals[environment]["one_disc"] += one_disc_cache or 0.0
             cells.extend(
                 [
-                    cell(f"{qty_col}{row_num}", quantity),
-                    cell(f"{hrs_col}{row_num}", env_row.usage_qty),
+                    cell(f"{qty_col}{row_num}", quantity, style=body_style),
+                    cell(f"{hrs_col}{row_num}", env_row.usage_qty, style=body_style),
                     cell(f"{list_col}{row_num}", recurring_list_value if list_formula is None else "", formula=list_formula, style=currency_style, formula_value=cached_value(recurring_list_cache)),
                 ]
             )
@@ -608,7 +651,7 @@ def build_wide_environment_sheet(
                 cells.append(cell(f"{one_disc_col}{row_num}", formula=one_disc_formula, style=currency_style, formula_value=cached_value(one_disc_cache)))
 
         total_cells = [
-            cell(f"{column_name(total_col_start)}{row_num}", formula="+".join(f"{col}{row_num}" for col in qty_cols), formula_value=cached_value(row_totals["qty"])),
+            cell(f"{column_name(total_col_start)}{row_num}", formula="+".join(f"{col}{row_num}" for col in qty_cols), style=body_style, formula_value=cached_value(row_totals["qty"])),
             cell(f"{column_name(total_col_start + 1)}{row_num}", formula="+".join(f"{col}{row_num}" for col in list_cols), style=currency_style, formula_value=cached_value(row_totals["list"])),
         ]
         next_offset = 2
@@ -636,24 +679,24 @@ def build_wide_environment_sheet(
         disc_col = column_name(start_col + 3) if include_discount else ""
         one_list_col = column_name(start_col + (4 if include_discount else 3))
         one_disc_col = column_name(start_col + 5) if include_discount else ""
-        cells = [cell(f"A{row_num}", f"{environment} Total")]
-        cells.append(cell(f"{list_col}{row_num}", formula=f"SUM({list_col}{data_start}:{list_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["list"])))
+        cells = [cell(f"A{row_num}", f"{environment} Total", style=summary_style)]
+        cells.append(cell(f"{list_col}{row_num}", formula=f"SUM({list_col}{data_start}:{list_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["list"])))
         if include_discount:
-            cells.append(cell(f"{disc_col}{row_num}", formula=f"SUM({disc_col}{data_start}:{disc_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["disc"])))
-        cells.append(cell(f"{one_list_col}{row_num}", formula=f"SUM({one_list_col}{data_start}:{one_list_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["one_list"])))
+            cells.append(cell(f"{disc_col}{row_num}", formula=f"SUM({disc_col}{data_start}:{disc_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["disc"])))
+        cells.append(cell(f"{one_list_col}{row_num}", formula=f"SUM({one_list_col}{data_start}:{one_list_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["one_list"])))
         if include_discount:
-            cells.append(cell(f"{one_disc_col}{row_num}", formula=f"SUM({one_disc_col}{data_start}:{one_disc_col}{data_end})", style=currency_style, formula_value=cached_value(env_totals[environment]["one_disc"])))
+            cells.append(cell(f"{one_disc_col}{row_num}", formula=f"SUM({one_disc_col}{data_start}:{one_disc_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["one_disc"])))
         summary_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
-    all_cells = [cell(f"A{all_summary_row}", "All Environments Total")]
-    all_cells.append(cell(f"{column_name(total_col_start + 1)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["list"])))
+    all_cells = [cell(f"A{all_summary_row}", "All Environments Total", style=total_style)]
+    all_cells.append(cell(f"{column_name(total_col_start + 1)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["list"])))
     offset = 2
     if include_discount:
-        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["disc"])))
+        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["disc"])))
         offset += 1
-    all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["one_list"])))
+    all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["one_list"])))
     offset += 1
     if include_discount:
-        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=currency_style, formula_value=cached_value(all_totals["one_disc"])))
+        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["one_disc"])))
     summary_rows.append(f'<row r="{all_summary_row}">{"".join(all_cells)}</row>')
 
     sheet_rows = [
@@ -665,7 +708,7 @@ def build_wide_environment_sheet(
         row_xml(note_row, ["Customer-facing view shows list prices only." if not include_discount else "Working view includes discount calculations."]),
         row_xml(disclaimer_row, ["Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."]),
     ]
-    widths = [16, 72, 18, 16] + (([12, 12, 18, 18, 18, 18] if include_discount else [12, 12, 18, 18, 18]) * len(environments)) + ([12, 20, 20, 20, 20] if include_discount else [12, 20, 20, 20])
+    widths = [16, 72, 18, 16] + (([12, 12, 18, 18, 18, 18] if include_discount else [12, 12, 18, 18]) * len(environments)) + ([12, 20, 20, 20, 20] if include_discount else [12, 20, 20])
     cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
     dimension = f"A1:{column_name(last_col)}{disclaimer_row}"
     sheet_data = "".join(sheet_rows)
@@ -851,6 +894,394 @@ def build_customer_sheet(
         include_discount=False,
         selected=True,
     )
+
+
+def env_row_groups(rows: list[BomRow]) -> dict[str, list[BomRow]]:
+    groups: dict[str, list[BomRow]] = {}
+    for row in rows:
+        environment = row.environment or "General"
+        groups.setdefault(environment, []).append(row)
+    return groups
+
+
+def row_quantity(row: BomRow) -> float | None:
+    part_qty = number_or_none(row.part_qty)
+    instance_qty = number_or_none(row.instance_qty)
+    if part_qty is None:
+        return None
+    if instance_qty is None:
+        return part_qty
+    return part_qty * instance_qty
+
+
+def configured_system_summary_rows(rows: list[BomRow]) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for environment, env_rows in env_row_groups(rows).items():
+        text = " ".join(
+            f"{row.part} {row.description} {row.custom_label} {row.custom_note}".lower()
+            for row in env_rows
+        )
+        is_cac = "cloud@customer" in text or "cloud at customer" in text or "c@c" in text
+        is_dedicated = "dedicated infrastructure" in text or "cloud infrastructure" in text
+        if not is_cac and not is_dedicated:
+            continue
+
+        rack_count = 0.0
+        db_servers = 0.0
+        storage_servers = 0.0
+        requested_ecpus = 0.0
+        license_model = ""
+        storage_type = "High Capacity" if "high capacity" in text or "storage server - x11m" in text else ""
+        db_type = "Base" if is_cac and "base system" in text else "X11M"
+        platform = "Exadata Cloud@Customer X11M" if is_cac else "OCI Exadata Dedicated Infrastructure X11M"
+
+        for row in env_rows:
+            description = row.description.lower()
+            note = row.custom_note.lower()
+            qty = row_quantity(row) or 0.0
+            if "base system rack" in description:
+                rack_count += qty or 1.0
+            if "database server" in description and row.part:
+                db_servers += qty
+            if "storage server" in description and row.part:
+                storage_servers += qty
+            if "ecpu" in description and row.part:
+                requested_ecpus += qty
+                if "byol" in description or "byol" in note or row.custom_label.upper() == "BYOL":
+                    license_model = "BYOL"
+                elif "license included" in description or "license included" in note:
+                    license_model = "License Included"
+
+        if is_cac and rack_count and not db_servers:
+            db_servers = rack_count * 2
+        if not rack_count and (db_servers or storage_servers):
+            rack_count = 1.0
+
+        if is_cac:
+            db_cores_per_server = 30 if db_type == "Base" else 190
+            ecpu_capacity_per_server = 120 if db_type == "Base" else 760
+            memory_per_server_gb = 660 if db_type == "Base" else 1390
+            max_vm_clusters = 12 if db_servers <= 2 else 24
+            redundancy = "High"
+            platform_note = "Cloud@Customer summary uses datasheet values; Base DB servers assumed when Base System Rack is present."
+        else:
+            db_cores_per_server = 190
+            ecpu_capacity_per_server = 760
+            memory_per_server_gb = 1390
+            max_vm_clusters = 8
+            redundancy = "High"
+            platform_note = "Dedicated Infrastructure summary uses X11M elastic datasheet values and calculator row counts."
+
+        storage_usable_tb = 80.0 if storage_type == "High Capacity" or is_dedicated else 0.0
+        xrmem_per_storage_tb = 1.25 if storage_usable_tb else 0.0
+        flash_cache_per_storage_tb = 27.2 if storage_usable_tb else 0.0
+
+        summaries.append(
+            {
+                "environment": environment,
+                "platform": platform,
+                "racks": rack_count,
+                "db_type": db_type,
+                "db_servers": db_servers,
+                "storage_type": storage_type or "X11M Storage",
+                "storage_servers": storage_servers,
+                "requested_ecpus": requested_ecpus,
+                "configured_ecpus": db_servers * ecpu_capacity_per_server,
+                "db_cores": db_servers * db_cores_per_server,
+                "memory_gb": db_servers * memory_per_server_gb,
+                "usable_storage_tb": storage_servers * storage_usable_tb,
+                "xrmem_tb": storage_servers * xrmem_per_storage_tb,
+                "flash_cache_tb": storage_servers * flash_cache_per_storage_tb,
+                "max_vm_clusters": max_vm_clusters,
+                "redundancy": redundancy,
+                "license_model": license_model or "TBD",
+                "notes": platform_note,
+            }
+        )
+    return summaries
+
+
+def build_system_summary_sheet(
+    rows: list[BomRow],
+    reference_label: str,
+    currency_style: int,
+) -> str:
+    today = date.today().strftime("%m/%d/%Y")
+    summary_style = currency_style + 1
+    detail_style = currency_style + 2
+    body_style = currency_style + len(ENVIRONMENT_FILL_COLORS) + 4
+    summaries = configured_system_summary_rows(rows)
+    sheet_rows = [
+        row_xml(1, [f"Configured System Summary (as of {today})"]),
+        row_xml(2, [f"Reference label: {reference_label}"]),
+        row_xml(3, ["Source: generated from BOM rows plus Exadata X11M datasheet reference values. Pricing fields remain on PAAS and Customer BOM sheets."]),
+    ]
+
+    current_row = 5
+    first_heading_row = current_row
+    characteristic_rows = [
+        ("Platform", "platform"),
+        ("Racks", "racks"),
+        ("Database server type", "db_type"),
+        ("Database servers", "db_servers"),
+        ("Storage server type", "storage_type"),
+        ("Storage servers", "storage_servers"),
+        ("Requested ECPUs", "requested_ecpus"),
+        ("Configured ECPU capacity", "configured_ecpus"),
+        ("Usable database cores", "db_cores"),
+        ("VM memory GB", "memory_gb"),
+        ("Usable storage TB", "usable_storage_tb"),
+        ("XRMEM TB", "xrmem_tb"),
+        ("Flash cache TB", "flash_cache_tb"),
+        ("Max VM clusters", "max_vm_clusters"),
+        ("Storage redundancy", "redundancy"),
+        ("License model", "license_model"),
+        ("Basis / notes", "notes"),
+    ]
+    if summaries:
+        for item in summaries:
+            sheet_rows.append(
+                f'<row r="{current_row}">'
+                f'{cell(f"A{current_row}", item["environment"], style=summary_style)}'
+                f'{cell(f"B{current_row}", "", style=summary_style)}'
+                "</row>"
+            )
+            current_row += 1
+            sheet_rows.append(
+                f'<row r="{current_row}">'
+                f'{cell(f"A{current_row}", "Description", style=detail_style)}'
+                f'{cell(f"B{current_row}", "Value", style=detail_style)}'
+                "</row>"
+            )
+            current_row += 1
+            for label, key in characteristic_rows:
+                sheet_rows.append(
+                    f'<row r="{current_row}">'
+                    f'{cell(f"A{current_row}", label, style=body_style)}'
+                    f'{cell(f"B{current_row}", item[key], style=body_style)}'
+                    "</row>"
+                )
+                current_row += 1
+            current_row += 1
+    else:
+        sheet_rows.append(row_xml(current_row, ["No configured Exadata system rows were detected in the BOM input."], {1: body_style}))
+        current_row += 1
+
+    note_row = current_row + 1
+    sheet_rows.append(
+        row_xml(
+            note_row,
+            [
+                "Capacity values are technical sizing references, not prices. Validate server model, redundancy, local-backup assumptions, and workload requirements before procurement."
+            ],
+        )
+    )
+
+    last_col = 2
+    widths = [34, 88]
+    cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
+    dimension = f"A1:{column_name(last_col)}{note_row}"
+    sheet_data = "".join(sheet_rows)
+    merge_refs = []
+    if summaries:
+        row_num = first_heading_row
+        for _item in summaries:
+            merge_refs.append(f"A{row_num}:B{row_num}")
+            row_num += len(characteristic_rows) + 3
+    merges = f'<mergeCells count="{len(merge_refs)}">' + "".join(f'<mergeCell ref="{ref}"/>' for ref in merge_refs) + "</mergeCells>" if merge_refs else ""
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="{dimension}"/>
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>{cols}</cols>
+  <sheetData>{sheet_data}</sheetData>
+  {merges}
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>'''
+
+
+def drawio_label(value: object) -> str:
+    return html.escape(str(value), quote=True).replace("\n", "&#xa;")
+
+
+def drawio_cell(
+    cell_id: str,
+    value: object,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    style: str,
+    parent: str = "1",
+) -> str:
+    return (
+        f'<mxCell id="{cell_id}" value="{drawio_label(value)}" style="{style}" vertex="1" parent="{parent}">'
+        f'<mxGeometry x="{x:g}" y="{y:g}" width="{width:g}" height="{height:g}" as="geometry"/>'
+        "</mxCell>"
+    )
+
+
+def drawio_edge(edge_id: str, source: str, target: str) -> str:
+    style = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6B7280;"
+    return (
+        f'<mxCell id="{edge_id}" value="" style="{style}" edge="1" parent="1" source="{source}" target="{target}">'
+        '<mxGeometry relative="1" as="geometry"/>'
+        "</mxCell>"
+    )
+
+
+def build_drawio_diagram(rows: list[BomRow], reference_label: str) -> str:
+    summaries = configured_system_summary_rows(rows)
+    if not summaries:
+        summaries = [
+            {
+                "environment": "General",
+                "platform": "No configured Exadata system rows detected",
+                "racks": "",
+                "db_type": "",
+                "db_servers": "",
+                "storage_type": "",
+                "storage_servers": "",
+                "requested_ecpus": "",
+                "configured_ecpus": "",
+                "db_cores": "",
+                "memory_gb": "",
+                "usable_storage_tb": "",
+                "xrmem_tb": "",
+                "flash_cache_tb": "",
+                "max_vm_clusters": "",
+                "redundancy": "",
+                "license_model": "",
+                "notes": "Add Exadata BOM rows to generate a configured-system diagram.",
+            }
+        ]
+
+    title_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#1F4E79;fontColor=#FFFFFF;fontStyle=1;strokeColor=#1F4E79;"
+    section_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#305496;fontColor=#FFFFFF;fontStyle=1;strokeColor=#1F4E79;"
+    db_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF2F8;strokeColor=#6D8F8D;fontColor=#111827;"
+    storage_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F7F6;strokeColor=#6D8F8D;fontColor=#111827;"
+    vm_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#F7F7F7;strokeColor=#9C918A;fontColor=#111827;"
+    note_style = "rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#C94938;fontColor=#111827;"
+
+    cells = ['<mxCell id="0"/>', '<mxCell id="1" parent="0"/>']
+    today = date.today().strftime("%m/%d/%Y")
+    title_id = "title"
+    diagram_width = max(520, 420 * len(summaries) + 40)
+    cells.append(
+        drawio_cell(
+            title_id,
+            f"{reference_label}\nConfigured System Diagram\nGenerated {today}",
+            40,
+            30,
+            diagram_width,
+            70,
+            title_style,
+        )
+    )
+
+    for idx, item in enumerate(summaries):
+        x = 40 + (idx * 420)
+        y = 140
+        env_id = f"env_{idx}"
+        db_id = f"db_{idx}"
+        storage_id = f"storage_{idx}"
+        vm_id = f"vm_{idx}"
+        note_id = f"note_{idx}"
+        cells.append(
+            drawio_cell(
+                env_id,
+                f"{item['environment']}\n{item['platform']}\nRacks: {item['racks']} | License: {item['license_model']}",
+                x,
+                y,
+                380,
+                78,
+                section_style,
+            )
+        )
+        cells.append(
+            drawio_cell(
+                db_id,
+                "Database servers\n"
+                f"Type: {item['db_type']} | Count: {item['db_servers']}\n"
+                f"Requested ECPUs: {item['requested_ecpus']}\n"
+                f"Configured ECPU capacity: {item['configured_ecpus']}\n"
+                f"Usable DB cores: {item['db_cores']}\n"
+                f"VM memory: {item['memory_gb']} GB",
+                x,
+                y + 115,
+                180,
+                135,
+                db_style,
+            )
+        )
+        cells.append(
+            drawio_cell(
+                storage_id,
+                "Storage servers\n"
+                f"Type: {item['storage_type']} | Count: {item['storage_servers']}\n"
+                f"Usable storage: {item['usable_storage_tb']} TB\n"
+                f"XRMEM: {item['xrmem_tb']} TB\n"
+                f"Flash cache: {item['flash_cache_tb']} TB\n"
+                f"Redundancy: {item['redundancy']}",
+                x + 200,
+                y + 115,
+                180,
+                135,
+                storage_style,
+            )
+        )
+        cells.append(
+            drawio_cell(
+                vm_id,
+                f"VM clusters\nMaximum VM clusters: {item['max_vm_clusters']}\nECPUs are allocated to VM clusters and can scale online.",
+                x,
+                y + 280,
+                380,
+                70,
+                vm_style,
+            )
+        )
+        cells.append(
+            drawio_cell(
+                note_id,
+                f"Basis\n{item['notes']}",
+                x,
+                y + 375,
+                380,
+                70,
+                note_style,
+            )
+        )
+        cells.append(drawio_edge(f"edge_env_db_{idx}", env_id, db_id))
+        cells.append(drawio_edge(f"edge_env_storage_{idx}", env_id, storage_id))
+        cells.append(drawio_edge(f"edge_db_vm_{idx}", db_id, vm_id))
+        cells.append(drawio_edge(f"edge_storage_vm_{idx}", storage_id, vm_id))
+
+    source_note = (
+        "Source note: sizing values come from BOM rows and active Exadata X11M reference values. "
+        "Diagram is a proposal-level view, not a formal Oracle quote."
+    )
+    cells.append(drawio_cell("source_note", source_note, 40, 620, diagram_width, 54, note_style))
+    root = "".join(cells)
+    return (
+        '<mxfile host="app.diagrams.net" type="device">'
+        '<diagram id="oracle-cloud-bom-diagram" name="Configured System">'
+        f'<mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" '
+        f'fold="1" page="1" pageScale="1" pageWidth="{diagram_width + 80:g}" pageHeight="720" math="0" shadow="0">'
+        f"<root>{root}</root>"
+        "</mxGraphModel>"
+        "</diagram>"
+        "</mxfile>"
+    )
+
+
+def write_drawio_diagram(rows: list[BomRow], reference_label: str, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(build_drawio_diagram(rows, reference_label), encoding="utf-8")
+    return
+
 
     today = date.today().strftime("%m/%d/%Y")
     customer_rows = [row for row in rows if row.part]
@@ -1135,6 +1566,13 @@ def workbook_rels_xml(template: Path) -> bytes:
             'Target="worksheets/sheet2.xml"/>'
         )
         rels = rels.replace("</Relationships>", f"{customer_rel}</Relationships>", 1)
+    if 'Target="worksheets/sheet3.xml"' not in rels:
+        summary_rel = (
+            '<Relationship Id="rId6" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+            'Target="worksheets/sheet3.xml"/>'
+        )
+        rels = rels.replace("</Relationships>", f"{summary_rel}</Relationships>", 1)
     return rels.encode("utf-8")
 
 
@@ -1148,6 +1586,12 @@ def content_types_xml(template: Path) -> bytes:
             'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
         )
         content_types = content_types.replace("</Types>", f"{override}</Types>", 1)
+    if 'PartName="/xl/worksheets/sheet3.xml"' not in content_types:
+        override = (
+            '<Override PartName="/xl/worksheets/sheet3.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        )
+        content_types = content_types.replace("</Types>", f"{override}</Types>", 1)
     return content_types.encode("utf-8")
 
 
@@ -1156,6 +1600,9 @@ def workbook_with_customer_sheet_xml(template: Path) -> bytes:
     if 'name="Customer BOM"' not in workbook_xml_text:
         customer_sheet = '<sheet sheetId="2" name="Customer BOM" state="visible" r:id="rId5"/>'
         workbook_xml_text = workbook_xml_text.replace("</sheets>", f"{customer_sheet}</sheets>", 1)
+    if 'name="System Summary"' not in workbook_xml_text:
+        summary_sheet = '<sheet sheetId="3" name="System Summary" state="visible" r:id="rId6"/>'
+        workbook_xml_text = workbook_xml_text.replace("</sheets>", f"{summary_sheet}</sheets>", 1)
     if "<bookViews>" not in workbook_xml_text:
         if re.search(r"<workbookPr[^>]*/>", workbook_xml_text):
             workbook_xml_text = re.sub(
@@ -1177,10 +1624,11 @@ def workbook_with_customer_sheet_xml(template: Path) -> bytes:
     return workbook_xml_text.encode("utf-8")
 
 
-def write_workbook(template: Path, output: Path, sheet_xml: str, customer_sheet_xml: str) -> None:
+def write_workbook(template: Path, output: Path, sheet_xml: str, customer_sheet_xml: str, system_summary_xml: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(template, "r") as src, ZipFile(output, "w", ZIP_DEFLATED) as dst:
         wrote_customer_sheet = False
+        wrote_system_summary_sheet = False
         for info in src.infolist():
             data = src.read(info.filename)
             if info.filename == "xl/worksheets/sheet1.xml":
@@ -1188,6 +1636,9 @@ def write_workbook(template: Path, output: Path, sheet_xml: str, customer_sheet_
             elif info.filename == "xl/worksheets/sheet2.xml":
                 data = customer_sheet_xml.encode("utf-8")
                 wrote_customer_sheet = True
+            elif info.filename == "xl/worksheets/sheet3.xml":
+                data = system_summary_xml.encode("utf-8")
+                wrote_system_summary_sheet = True
             elif info.filename == "xl/styles.xml":
                 data = workbook_styles_xml(template)
             elif info.filename == "xl/workbook.xml":
@@ -1201,6 +1652,8 @@ def write_workbook(template: Path, output: Path, sheet_xml: str, customer_sheet_
             dst.writestr(info, data)
         if not wrote_customer_sheet:
             dst.writestr("xl/worksheets/sheet2.xml", customer_sheet_xml.encode("utf-8"))
+        if not wrote_system_summary_sheet:
+            dst.writestr("xl/worksheets/sheet3.xml", system_summary_xml.encode("utf-8"))
 
 
 def main() -> None:
@@ -1222,6 +1675,11 @@ def main() -> None:
         "--supplemental-source-date",
         default="",
         help="Document date from the front page of the supplemental Oracle eSource pricing PDF.",
+    )
+    parser.add_argument(
+        "--diagram-output",
+        type=Path,
+        help="Optional Draw.io-compatible .drawio block diagram output path.",
     )
     args = parser.parse_args()
 
@@ -1245,7 +1703,10 @@ def main() -> None:
         args.realm,
         currency_style,
     )
-    write_workbook(args.template, args.output, sheet_xml, customer_sheet_xml)
+    system_summary_xml = build_system_summary_sheet(rows, args.reference_label, currency_style)
+    write_workbook(args.template, args.output, sheet_xml, customer_sheet_xml, system_summary_xml)
+    if args.diagram_output:
+        write_drawio_diagram(rows, args.reference_label, args.diagram_output)
     print(args.output)
 
 

@@ -125,9 +125,9 @@ The customer-facing BOM should hide or omit:
 
 When the user asks for a customer version that shows only list price, include all SKUs and quantities in the wide environment-block format and do not show discounted totals. Keep discounts in the internal/proposal working view only unless the user explicitly asks to expose them.
 
-## Future Configured-System Summary
+## Configured-System Summary
 
-A useful future enhancement is a configured-system summary sheet that translates BOM rows and datasheet sizing rules into an easy-to-read description of the configured platform.
+Generated proposal workbooks include a configured-system summary sheet that translates BOM rows and datasheet sizing rules into an easy-to-read description of the configured platform. The current generated layout uses one section per environment, with a heading followed by `Description` and `Value` rows.
 
 For Exadata and similar engineered systems, the summary should show:
 
@@ -148,9 +148,9 @@ The summary should distinguish between:
 
 This summary should be generated from current datasheet references and BOM inputs, not inferred from price alone.
 
-## Future Draw.io Diagram
+## Optional Draw.io Diagram
 
-Another useful future enhancement is an optional simple block diagram, preferably in Draw.io-compatible `.drawio` XML, that depicts the configured system at proposal level.
+The builder can emit an optional simple block diagram in Draw.io-compatible `.drawio` XML with `--diagram-output`. The diagram depicts the configured system at proposal level.
 
 The diagram should be intentionally simple:
 
@@ -160,7 +160,7 @@ The diagram should be intentionally simple:
 - Environment labels such as Production, Test/Dev, DR, and Shared/Common when present.
 - Source note identifying that sizing values come from the active datasheet reference and BOM inputs.
 
-The diagram should be an optional artifact. Do not make it a prerequisite for producing the BOM.
+The diagram is an optional artifact. Do not make it a prerequisite for producing the BOM.
 
 ## Environment Requirement
 
@@ -193,7 +193,7 @@ The current deterministic builder can produce simple estimator-style BOMs. The p
 - A visible customer-facing list-price BOM view with all SKUs and quantities.
 - Optional current-state input tables for server inventory and usage.
 - Future-state resource mapping by environment.
-- Optional configured-system summary with processor, memory, storage, and performance capacity.
+- Configured-system summary with processor, memory, storage, and performance capacity.
 - Optional Draw.io block diagram for customer-friendly system specification views.
 - Current pricing refresh from calculator/export or verified eSource.
 - Optional discount comparison and multi-year TCO output.

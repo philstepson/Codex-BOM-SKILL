@@ -86,12 +86,17 @@ Leave SKU and price fields blank when current pricing has not been supplied or e
 
 ## Current Generated BOM Patterns
 
-The repo currently contains two generated BOM patterns:
+The repo currently contains these generated BOM patterns:
 
 - `outputs/StandardC@C.xlsx`: Cloud@Customer X11M Base rack output generated from `tmp/StandardC@C-b91390.csv`. It includes `B110634` Base System Rack, `B110647` High Capacity storage servers, `B110663` BYOL ECPU runtime, and `B91390` one-time installation and activation. The installation row is excluded from recurring monthly totals and included once in discounted annual cost.
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M output generated from `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`. It preserves calculator-backed rows for 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
+- `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx`: Multi-environment proposal workbook with Production and Disaster Recovery Exadata Cloud@Customer rows plus Non-Prod OCI Dedicated Exadata rows.
 
 Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use visually grouped environment-specific column blocks for quantity, hours, annual recurring list price, and one-time list price; blank cells show when a SKU does not apply to an environment. It should also include environment summary rows below the SKU rows and final all-environment total columns, without verbose source-note columns. The `PAAS` working sheet should use the same environment-block layout and add discounted price columns.
+
+Generated workbooks should also include a visible `System Summary` sheet. It uses vertical environment sections with `Description` and `Value` columns to distinguish requested ECPUs, configured platform ECPU capacity, usable database cores, VM memory, storage capacity, XRMEM, flash cache, VM-cluster limits, redundancy, license model, and source assumptions.
+
+When `--diagram-output` is supplied, the builder should also create a Draw.io-compatible `.drawio` file with proposal-level blocks for environments, database servers, storage servers, VM clusters, and a source note.
 
 ## Default Sheet Design
 

@@ -115,6 +115,8 @@ def main() -> None:
     parts = workbook_parts(args.workbook)
     if "xl/worksheets/sheet2.xml" not in parts:
         fail("Missing customer-facing BOM worksheet")
+    if "xl/worksheets/sheet3.xml" not in parts:
+        fail("Missing configured-system summary worksheet")
 
     customer_cells = read_sheet(args.workbook, "xl/worksheets/sheet2.xml")
     customer_values = set(customer_cells.values())
@@ -157,12 +159,50 @@ def main() -> None:
         content_types_text = workbook.read("[Content_Types].xml").decode("utf-8")
     if 'name="Customer BOM"' not in workbook_xml_text:
         fail("Workbook does not register the Customer BOM sheet")
+    if 'name="System Summary"' not in workbook_xml_text:
+        fail("Workbook does not register the System Summary sheet")
     if 'activeTab="1"' not in workbook_xml_text:
         fail("Workbook does not open on the Customer BOM sheet")
     if 'Target="worksheets/sheet2.xml"' not in rels_xml_text:
         fail("Workbook relationships do not include the Customer BOM sheet")
+    if 'Target="worksheets/sheet3.xml"' not in rels_xml_text:
+        fail("Workbook relationships do not include the System Summary sheet")
     if 'PartName="/xl/worksheets/sheet2.xml"' not in content_types_text:
         fail("Content types do not include the Customer BOM sheet")
+    if 'PartName="/xl/worksheets/sheet3.xml"' not in content_types_text:
+        fail("Content types do not include the System Summary sheet")
+
+    summary_cells = read_sheet(args.workbook, "xl/worksheets/sheet3.xml")
+    summary_values = set(summary_cells.values())
+    required_summary_labels = {
+        "Description",
+        "Value",
+        "Platform",
+        "Database servers",
+        "Storage servers",
+        "Requested ECPUs",
+        "Configured ECPU capacity",
+        "VM memory GB",
+        "Usable storage TB",
+        "Basis / notes",
+    }
+    missing_summary_labels = required_summary_labels - summary_values
+    if missing_summary_labels:
+        fail(f"System Summary missing labels: {', '.join(sorted(missing_summary_labels))}")
+    if "Configured System Summary" not in " ".join(summary_values):
+        fail("System Summary missing title")
+    if not any(
+        summary_cells.get(f"A{row_num}") not in {"", "Description"}
+        and summary_cells.get(f"B{row_num}") == ""
+        and summary_cells.get(f"A{row_num + 1}") == "Description"
+        and summary_cells.get(f"B{row_num + 1}") == "Value"
+        for row_num in range(5, 120)
+    ):
+        fail("System Summary missing vertical environment sections")
+    if "Exadata Cloud@Customer X11M" in " ".join(customer_values) and "Exadata Cloud@Customer X11M" not in summary_values:
+        fail("System Summary missing Cloud@Customer platform row")
+    if "OCI Exadata Dedicated Infrastructure X11M" in " ".join(customer_values) and "OCI Exadata Dedicated Infrastructure X11M" not in summary_values:
+        fail("System Summary missing Dedicated Infrastructure platform row")
 
     calc_pr = workbook_root.find("x:calcPr", NS)
     if calc_pr is None:
