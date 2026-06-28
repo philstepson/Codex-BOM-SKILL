@@ -5,8 +5,7 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 ## Current State
 
 - Repository: `/Users/PWSTEPHE/codex/Codex-BOM-SKILL/oracle-cloud-bom-builder`
-- Latest pushed commit at the time of this note: `e7b6109 Align PAAS and customer environment layouts`
-- `resume.txt` is untracked and has been intentionally left untouched.
+- Previous pushed commit before the monthly/annual totals and Autonomous test updates: `e7b6109 Align PAAS and customer environment layouts`
 
 ## Current Workbook Direction
 
@@ -19,9 +18,11 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 - `Customer BOM` is the default active sheet when generated workbooks open.
 - `Customer BOM` is list-price-only and intentionally omits verbose source notes and discount columns.
 - `PAAS` is the internal working sheet using the same wide environment-block layout, with discount columns:
-  - `Disc Price`
+  - `Monthly Disc`
+  - `Annual Disc`
   - `One-Time Disc`
-- Recurring list-price columns are annualized. One-time service rows remain separate.
+- Recurring list-price columns show both monthly and annual totals. One-time service rows remain separate.
+- Every environment should show a monthly recurring total and annual recurring total. Multi-environment workbooks should also show combined all-environment monthly and annual recurring totals.
 - Generated colored headers and summary cells use bold white text, thin borders, whole-dollar currency formats, and emphasized subtotal rows for readability.
 - Generated workbooks include a visible `System Summary` worksheet. It uses a vertical layout: each environment has its own heading, followed by `Description` and `Value` rows for configured-system characteristics.
 - `scripts/build_bom_template.py` can optionally emit a Draw.io-compatible `.drawio` block diagram with `--diagram-output`.
@@ -37,6 +38,8 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 - `outputs/StandardC@C.drawio`
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.drawio`
+- `outputs/prod-autonomous-dedicated-exadata-x11m-64-li-ecpus.xlsx`
+- `outputs/prod-autonomous-dedicated-exadata-x11m-64-li-ecpus.drawio`
 - `outputs/sample-oracle-cloud-bom.xlsx`
 - `outputs/sample-oracle-cloud-bom.drawio`
 
@@ -44,12 +47,14 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 
 - `inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv`
 - `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`
+- `inputs/prod-autonomous-dedicated-exadata-x11m-64-li-ecpus.csv`
 - `tmp/StandardC@C-b91390.csv`
 
 ## Pricing Rules Captured
 
-- Use Oracle pricing calculator / Cost Estimator rows first for standard OCI Dedicated Exadata and Database@ platforms.
-- Use current/date-verified eSource PDF only for Cloud@Customer gaps or explicit price-list-only SKUs.
+- Treat the current authenticated/date-verified eSource PDF as the definitive price list when exact rows are available.
+- Oracle pricing calculator / Cost Estimator exports are also authoritative for calculator-covered resources and are usually the fastest complete workflow source.
+- Do not treat public pricing pages, old workbook price tabs, or prior extracted files as pricing authority.
 - Explicit SKU additions, such as `B91390`, must be looked up by exact SKU in the verified price source.
 - One-time service SKUs should not contribute to recurring monthly cost but should appear in one-time list/discount totals.
 - Run `scripts/check_pricing_refresh.py` before finalizing BOMs that depend on calculator exports or eSource PDF rows. Provide `--current-esource-date` from the authenticated eSource PDF so the script can compare the live document date with cache metadata.
@@ -81,3 +86,9 @@ Use this file to resume the Oracle Cloud BOM Builder work quickly in a future se
 - Added configured-system summary sheet for processor, memory, storage, and performance capacity.
 - Added optional Draw.io-compatible block diagram output.
 - Added pricing refresh preflight around calculator export and eSource date verification.
+
+## Follow-Up Items
+
+- Add BOM coverage tests/examples for Base Database Service.
+- Add BOM coverage tests/examples for Exadata Database Service on Exascale Infrastructure.
+- Review and correct any remaining workbook/source-policy issues after those service paths are added.

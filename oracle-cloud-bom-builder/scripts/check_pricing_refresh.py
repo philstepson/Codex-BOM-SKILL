@@ -90,6 +90,25 @@ def row_text(row: dict[str, str]) -> str:
     return " ".join(str(value or "") for value in row.values()).lower()
 
 
+def is_esource_priced_text(text: str) -> bool:
+    esource_markers = [
+        "pricing sourced from oracle esource",
+        "pricing sourced from authenticated oracle esource",
+        "oracle esource pdf pricing",
+        "priced from oracle esource",
+        "priced by oracle esource",
+        "row came from the oracle esource",
+        "source document date",
+    ]
+    price_list_markers = [
+        "pricing sourced from oracle price-list",
+        "pricing sourced from oracle price list",
+        "price-list description and price fields",
+        "price list description and price fields",
+    ]
+    return any(marker in text for marker in esource_markers + price_list_markers)
+
+
 def scan_csv(path: Path) -> dict[str, object]:
     result: dict[str, object] = {
         "path": str(path),
@@ -106,7 +125,8 @@ def scan_csv(path: Path) -> dict[str, object]:
             text = row_text(row)
             if "calculator" in text or "cost estimator" in text:
                 result["calculator_rows"] = int(result["calculator_rows"]) + 1
-            if "esource" in text or "price-list" in text or "price list" in text:
+            has_esource_pricing = is_esource_priced_text(text)
+            if has_esource_pricing:
                 result["esource_rows"] = int(result["esource_rows"]) + 1
             for match in re.finditer(r"(?:document date|last updated)\s*:?\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE):
                 cast_dates = result["esource_dates"]
@@ -120,7 +140,7 @@ def scan_csv(path: Path) -> dict[str, object]:
                 or "database@aws" in text
                 or "cloud infrastructure" in text
             )
-            if is_standard_exadata and not is_cloud_at_customer and ("esource" in text or "price-list" in text):
+            if is_standard_exadata and not is_cloud_at_customer and has_esource_pricing:
                 result["standard_exadata_esource_rows"] = int(result["standard_exadata_esource_rows"]) + 1
     return result
 

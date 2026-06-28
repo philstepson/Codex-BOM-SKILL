@@ -58,11 +58,11 @@ Recommended behavior:
 
 ## Supplemental Pricing From Current PDF Sources
 
-Use Oracle Cost Estimator or Oracle pricing calculator output as the primary source. Check calculator coverage before using eSource for any BOM that is not clearly Exadata Cloud@Customer. For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, the calculator output is the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM and add discount/formula columns without changing the calculator price fields.
+Use the current authenticated Oracle eSource price-list PDF as the definitive price list when it is available, date-checked, and exact rows can be found. For standard calculator-covered resources, Oracle Cost Estimator or Oracle pricing calculator output is also authoritative and is usually the primary workflow source because it provides the SKU rows, quantities, unit prices, and monthly costs together. Transpose calculator rows into the BOM and add discount/formula columns without changing the calculator price fields.
 
 Database@Azure, Database@Google Cloud, and Database@AWS use Exadata Dedicated Cloud pricing, not Exadata Cloud@Customer pricing. The default calculator configuration is a quarter rack with 2 database servers and 3 storage servers unless the user or calculator configuration says otherwise.
 
-When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, the BOM may use the current authenticated Oracle eSource PDF as a supplemental fallback. Ask the user to authenticate to eSource only after the calculator path is unavailable or incomplete, or when the request is Exadata Cloud@Customer.
+When an estimator row lacks needed SKU or price data, especially for Exadata Cloud@Customer database servers, storage servers, rack components, or related infrastructure, use the current authenticated Oracle eSource PDF after document-date validation. Ask the user to authenticate to eSource only when the calculator/export path is unavailable, incomplete, suspect, or when the request requires price-list-only rows.
 
 When the user explicitly asks to add a SKU, treat that SKU as an intentional workbook row even if it is not a normal calculator-generated product row. Search the verified current eSource price-list PDF by exact SKU before attempting description matching. Use the exact price-list description and price fields for the row, and include the billing basis and document date in `Custom Note`. For example, `B91390` may be requested as `Gen 2 Exadata Cloud at Customer Installation and Activation Service`; if that SKU is not present in the calculator output, it should be resolved from the current or date-verified cached price-list PDF rather than inferred from the service description.
 
@@ -92,7 +92,7 @@ The repo currently contains these generated BOM patterns:
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M output generated from `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`. It preserves calculator-backed rows for 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
 - `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx`: Multi-environment proposal workbook with Production and Disaster Recovery Exadata Cloud@Customer rows plus Non-Prod OCI Dedicated Exadata rows.
 
-Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use visually grouped environment-specific column blocks for quantity, hours, annual recurring list price, and one-time list price; blank cells show when a SKU does not apply to an environment. It should also include environment summary rows below the SKU rows and final all-environment total columns, without verbose source-note columns. The `PAAS` working sheet should use the same environment-block layout and add discounted price columns.
+Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use visually grouped environment-specific column blocks for quantity, hours, monthly recurring list price, annual recurring list price, and one-time list price; blank cells show when a SKU does not apply to an environment. It should also include environment summary rows below the SKU rows and final all-environment total columns for combined monthly and annual recurring cost, without verbose source-note columns. The `PAAS` working sheet should use the same environment-block layout and add monthly and annual discounted price columns.
 
 Generated workbooks should also include a visible `System Summary` sheet. It uses vertical environment sections with `Description` and `Value` columns to distinguish requested ECPUs, configured platform ECPU capacity, usable database cores, VM memory, storage capacity, XRMEM, flash cache, VM-cluster limits, redundancy, license model, and source assumptions.
 
@@ -154,7 +154,7 @@ Do not include a stale `xl/calcChain.xml` from the template after replacing work
 
 ## Legacy Workbook Pricing Warning
 
-When a user supplies a sample or classic Excel BOM, treat the workbook's embedded price-list sheets as potentially stale. Use the workbook to learn preferred layout, formulas, environment organization, and proposal workflow. For current pricing, refresh from the Oracle pricing calculator, Cost Estimator export, or verified current eSource PDF according to the pricing rules above.
+When a user supplies a sample or classic Excel BOM, treat the workbook's embedded price-list sheets as potentially stale. Use the workbook to learn preferred layout, formulas, environment organization, and proposal workflow. For current pricing, refresh from the verified current eSource PDF or from Oracle pricing calculator/Cost Estimator export according to the pricing rules above. Do not use public pricing pages as pricing authority.
 
 ## Formatting Guidance
 

@@ -20,6 +20,14 @@ EXPECTED_WIDE_HEADERS = [
 ]
 
 
+def column_name(index: int) -> str:
+    result = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
 def cell_text(cell: ET.Element) -> str:
     formula = cell.find("x:f", NS)
     if formula is not None and formula.text:
@@ -74,7 +82,7 @@ def is_number(value: object) -> bool:
 
 def find_wide_header_row(cells: dict[str, str]) -> int | None:
     for row_num in range(1, 80):
-        candidate = [cells.get(f"{chr(65 + idx)}{row_num}", "") for idx in range(4)]
+        candidate = [cells.get(f"{column_name(idx)}{row_num}", "") for idx in range(1, 5)]
         if candidate == EXPECTED_WIDE_HEADERS:
             return row_num
     return None
@@ -96,15 +104,17 @@ def main() -> None:
     paas_header_row = find_wide_header_row(cells)
     if paas_header_row is None:
         fail("PAAS wide header row mismatch")
-    paas_headers = [cells.get(f"{chr(65 + idx)}{paas_header_row}", "") for idx in range(120)]
+    paas_headers = [cells.get(f"{column_name(idx)}{paas_header_row}", "") for idx in range(1, 121)]
     if cells.get("J3") != "Discount %":
         fail("Missing discount label in J3")
     if not cells.get("K3"):
         fail("Missing discount value in K3")
-    if "Disc Price" not in paas_headers:
-        fail("PAAS sheet missing environment discount columns")
-    if "Total Disc Price" not in paas_headers:
-        fail("PAAS sheet missing total discount column")
+    for header in ["Monthly List", "Annual List", "Monthly Disc", "Annual Disc"]:
+        if header not in paas_headers:
+            fail(f"PAAS sheet missing {header} columns")
+    for header in ["Total Monthly List", "Total Annual List", "Total Monthly Disc", "Total Annual Disc"]:
+        if header not in paas_headers:
+            fail(f"PAAS sheet missing {header} column")
     has_priced_paas_rows = any(
         ref.startswith("D") and ref[1:].isdigit() and int(ref[1:]) > paas_header_row and is_number(value)
         for ref, value in cells.items()
@@ -129,7 +139,7 @@ def main() -> None:
     customer_header_row = find_wide_header_row(customer_cells)
     if customer_header_row is None:
         fail("Customer BOM header row mismatch")
-    customer_headers = [customer_cells.get(f"{chr(65 + idx)}{customer_header_row}", "") for idx in range(80)]
+    customer_headers = [customer_cells.get(f"{column_name(idx)}{customer_header_row}", "") for idx in range(1, 121)]
     if "Discount %" in customer_cells.values() or "Disc Price" in customer_cells.values():
         fail("Customer BOM should not expose discount columns")
     if "Customer Note" in customer_cells.values():
@@ -138,10 +148,14 @@ def main() -> None:
         fail("Customer BOM missing environment summary block")
     if not any(value == "Qty" for value in customer_headers):
         fail("Customer BOM missing environment quantity columns")
-    if not any(value == "List Price" for value in customer_headers):
-        fail("Customer BOM missing environment list-price columns")
-    if "Total List Price" not in customer_headers:
-        fail("Customer BOM missing final total list-price column")
+    if "Monthly List" not in customer_headers:
+        fail("Customer BOM missing environment monthly list-price columns")
+    if "Annual List" not in customer_headers:
+        fail("Customer BOM missing environment annual list-price columns")
+    if "Total Monthly List" not in customer_headers:
+        fail("Customer BOM missing final total monthly list-price column")
+    if "Total Annual List" not in customer_headers:
+        fail("Customer BOM missing final total annual list-price column")
     if "Total One-Time List" not in customer_headers:
         fail("Customer BOM missing final total one-time list-price column")
     if not any(re.fullmatch(r"=SUM\([A-Z]+\d+:[A-Z]+\d+\)", value) for value in customer_cells.values()):

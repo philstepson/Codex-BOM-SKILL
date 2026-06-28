@@ -111,7 +111,7 @@ The customer-facing BOM should show:
 - Oracle product or service description.
 - Metric or billing basis.
 - Unit list price.
-- One column block for each environment, with quantity, usage quantity or hours, annual recurring list price, and one-time list price.
+- One column block for each environment, with quantity, usage quantity or hours, monthly recurring list price, annual recurring list price, and one-time list price.
 - Final total columns for all environments.
 - Visible summary rows under the SKU rows for each environment and one final all-environments total.
 

@@ -18,7 +18,7 @@ Use this skill to create a new Excel BOM workbook for Oracle Cloud architecture 
    - Environment names and the environment assignment for each resource or SKU row, such as production, non-production, test/dev, disaster recovery, or shared/common.
    - Any explicit add-on SKUs the user wants included, even when they are services or non-product price-list items rather than core cloud resources.
    - Supplemental pricing source details when calculator data is incomplete, especially the current Oracle eSource PDF URL and the document date shown on the PDF front page.
-2. Decide pricing source before extracting rows. Try Oracle pricing calculator or Oracle Cost Estimator coverage first for any BOM that is not clearly Exadata Cloud@Customer. For standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, Database@AWS, and most OCI services, use calculator output as the source of truth for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM format without changing the calculator price fields.
+2. Decide pricing source before extracting rows. Treat the current authenticated Oracle eSource price-list PDF as the definitive price list when it is available and date-checked. For standard calculator-covered resources, Oracle pricing calculator or Oracle Cost Estimator exports are also authoritative and are usually the fastest workflow source for SKU rows, quantities, unit prices, and monthly costs. Transpose those rows into the BOM format without changing the calculator price fields.
 3. If the architecture is described but estimator inputs are missing, read `references/requirements-gathering.md` and ask the smallest useful set of sizing questions for the named services.
 4. Prompt for any parameter required for a valid configuration when it is missing. For Exadata requests this includes platform, license model, Exadata generation/model when not defaulting to latest, ECPU quantity, database server count, storage server count, and any additional database or storage servers beyond the calculator default.
 5. Create a new `.xlsx` workbook using the Oracle Cost Estimator format as the base layout.
@@ -49,8 +49,8 @@ After generating a workbook with the script, run `scripts/validate_bom_workbook.
 
 The default workbook should include:
 
-- A primary `PAAS` sheet unless the user specifies another service type. For multi-environment BOMs, this should use the same wide environment-block layout as `Customer BOM` and add discounted price columns.
-- A visible `Customer BOM` sheet with list-price-only environment blocks.
+- A primary `PAAS` sheet unless the user specifies another service type. For multi-environment BOMs, this should use the same wide environment-block layout as `Customer BOM` and add monthly, annual, and discounted price columns.
+- A visible `Customer BOM` sheet with list-price-only environment blocks that show monthly and annual totals.
 - A visible `System Summary` sheet with vertical environment sections for configured capacity.
 - A visible discount input near the top of the primary sheet or on an `Inputs`/`Summary` sheet.
 - Additional columns for discounted monthly and annual cost.
@@ -90,10 +90,10 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 
 - Treat Oracle Cost Estimator values as list-price estimates.
 - Preserve `Unit Price` and `Monthly Cost` as list-price fields.
-- Prefer Oracle Cost Estimator or Oracle pricing calculator output whenever it provides a complete price for a row. This is the default for nearly all non-Cloud@Customer BOMs.
-- For standard Exadata Dedicated Infrastructure and Database@Azure, Database@Google Cloud, or Database@AWS, use the calculator output as authoritative for SKUs, row quantities, unit prices, and monthly costs. Do not replace those rows with hand-derived eSource pricing when calculator output is available.
+- Treat the current authenticated Oracle eSource price-list PDF as definitive when it is available, date-checked, and the needed row can be found exactly. The online calculator or Cost Estimator export is also authoritative for calculator-covered resources and is generally the easiest source for complete BOM row quantities and monthly costs.
+- For standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, Database@AWS, and most OCI services, use the calculator output as authoritative for SKUs, row quantities, unit prices, and monthly costs when it provides complete rows. Do not use public web pricing pages, stale workbooks, or historical extracted files as pricing authority.
 - When a user asks for a Database@Azure, Database@Google Cloud, or Database@AWS Exadata BOM and omits the license model, ask whether the configuration is BYOL or License Included before pricing. When the Exadata generation/model is omitted, default to the latest model only after stating that assumption, unless the user asks for a prior generation.
-- If Oracle Cost Estimator or the pricing calculator cannot provide the needed SKU or price for a row, use the current Oracle eSource PDF supplied by the user as a supplemental fallback source.
+- If Oracle Cost Estimator or the pricing calculator cannot provide the needed SKU or price for a row, use the current authenticated Oracle eSource PDF as the authoritative fallback source after checking its document date.
 - If the user supplies a SKU that is not present in the calculator export, search the verified current eSource price-list PDF by exact SKU first, then by normalized description only if the SKU search fails. Do not substitute a similarly named row without calling out the mismatch and asking for confirmation.
 - The current supplemental PDF URL is `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`; open it through browser authentication when needed.
 - A local PDF cache is allowed for repeatability, but it must be refreshed from eSource before each pricing run when the eSource document date is newer than the cached document date. Follow `references/esource-price-list-cache.md`.

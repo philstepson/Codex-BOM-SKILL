@@ -103,16 +103,16 @@ Create a BOM for an Exadata Cloud@Customer X11M single-rack baseline with 3 High
 
 ## Pricing Source Order
 
-The skill uses this pricing order:
+The skill uses this pricing authority model:
 
-1. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session. This is the default path for almost every BOM that is not Exadata Cloud@Customer.
-2. User-provided estimator-style rows from an approved source.
-3. Supplemental pricing extracted at runtime from the current authenticated Oracle eSource PDF, only when calculator pricing is unavailable/incomplete or when the request is Exadata Cloud@Customer.
+1. Current authenticated Oracle eSource price-list PDF, after document-date validation, is the definitive price list when exact rows are available.
+2. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session are authoritative for calculator-covered resources and are usually the easiest complete BOM source.
+3. User-provided estimator-style rows from an approved source can be used when their origin is clear.
 4. Blank editable price fields with notes when no approved source is available.
 
 The skill must not invent Oracle SKU pricing.
 
-Before using eSource, decide whether the pricing calculator can produce the needed rows. If it can, use the calculator and do not hand-derive pricing from the eSource PDF. If the calculator cannot cover the row set, ask the user to authenticate to eSource, compare the current eSource document date with the persisted cache metadata, refresh the cached PDF when eSource is newer, and extract only the required rows.
+For workflow efficiency, check whether the pricing calculator can produce the needed rows before asking for eSource authentication. If eSource is already available and date-checked, it is the definitive price list. If the calculator covers the row set, use the calculator/export rows for quantities and monthly costs. Public pricing pages, old workbook price tabs, and prior extracted files are not authoritative pricing sources.
 
 Do not treat pricing embedded in a historical Excel BOM sample as current. Use those workbooks for format, environment layout, formulas, and proposal flow only unless their pricing sheets have been refreshed and date-verified for the active BOM.
 
@@ -207,7 +207,7 @@ python3 scripts/build_bom_template.py \
 The generated workbook includes:
 
 - A primary `PAAS` worksheet by default, using the same wide environment-block layout as the customer view and adding discount columns.
-- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, annual recurring list price, and one-time list-price blocks.
+- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, monthly recurring list price, annual recurring list price, and one-time list-price blocks.
 - A visible `System Summary` worksheet that groups configured-system capacity by environment in vertical `Description` / `Value` sections.
 - A single editable discount input in `K3`.
 - Discounted list-price columns on the `PAAS` working sheet.
@@ -220,13 +220,13 @@ When `--diagram-output` is supplied, the builder writes a Draw.io-compatible `.d
 
 The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
 
-The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific annual recurring list price and one-time list-price summaries plus all-environment totals.
+The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific monthly recurring, annual recurring, and one-time list-price summaries plus all-environment monthly and annual totals.
 
-The `PAAS` working sheet columns follow the same grouped environment pattern as the customer sheet, but include `Disc Price` and `One-Time Disc` columns.
+The `PAAS` working sheet columns follow the same grouped environment pattern as the customer sheet, but include monthly and annual discounted price columns plus one-time discounted columns.
 
 The customer-facing columns follow this pattern:
 
-`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `List Price`, `One-Time List`, followed by `Total Qty`, `Total List Price`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
+`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `Monthly List`, `Annual List`, `One-Time List`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
 
 `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 
