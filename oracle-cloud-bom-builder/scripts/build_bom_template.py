@@ -41,6 +41,10 @@ def discount_formula() -> str:
     return 'IF($K$3>1,$K$3/100,$K$3)'
 
 
+def sum_formula(refs: Iterable[str]) -> str:
+    return f"SUM({','.join(refs)})"
+
+
 @dataclass(frozen=True)
 class BomRow:
     part: str
@@ -651,17 +655,17 @@ def build_wide_environment_sheet(
                 cells.append(cell(f"{one_disc_col}{row_num}", formula=one_disc_formula, style=currency_style, formula_value=cached_value(one_disc_cache)))
 
         total_cells = [
-            cell(f"{column_name(total_col_start)}{row_num}", formula="+".join(f"{col}{row_num}" for col in qty_cols), style=body_style, formula_value=cached_value(row_totals["qty"])),
-            cell(f"{column_name(total_col_start + 1)}{row_num}", formula="+".join(f"{col}{row_num}" for col in list_cols), style=currency_style, formula_value=cached_value(row_totals["list"])),
+            cell(f"{column_name(total_col_start)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in qty_cols), style=body_style, formula_value=cached_value(row_totals["qty"])),
+            cell(f"{column_name(total_col_start + 1)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in list_cols), style=currency_style, formula_value=cached_value(row_totals["list"])),
         ]
         next_offset = 2
         if include_discount:
-            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in disc_cols), style=currency_style, formula_value=cached_value(row_totals["disc"])))
+            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in disc_cols), style=currency_style, formula_value=cached_value(row_totals["disc"])))
             next_offset += 1
-        total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in one_list_cols), style=currency_style, formula_value=cached_value(row_totals["one_list"])))
+        total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in one_list_cols), style=currency_style, formula_value=cached_value(row_totals["one_list"])))
         next_offset += 1
         if include_discount:
-            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula="+".join(f"{col}{row_num}" for col in one_disc_cols), style=currency_style, formula_value=cached_value(row_totals["one_disc"])))
+            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in one_disc_cols), style=currency_style, formula_value=cached_value(row_totals["one_disc"])))
         cells.extend(total_cells)
         all_totals["list"] += row_totals["list"]
         all_totals["disc"] += row_totals["disc"]
@@ -1453,24 +1457,24 @@ def write_drawio_diagram(rows: list[BomRow], reference_label: str, output: Path)
             [
                 cell(
                     f"{column_name(total_col_start)}{row_num}",
-                    formula="+".join(f"{col}{row_num}" for col in qty_cols),
+                    formula=sum_formula(f"{col}{row_num}" for col in qty_cols),
                     formula_value=cached_value(qty_total),
                 ),
                 cell(
                     f"{column_name(total_col_start + 1)}{row_num}",
-                    formula="+".join(f"{col}{row_num}" for col in monthly_cols),
+                    formula=sum_formula(f"{col}{row_num}" for col in monthly_cols),
                     style=currency_style,
                     formula_value=cached_value(monthly_total),
                 ),
                 cell(
                     f"{column_name(total_col_start + 2)}{row_num}",
-                    formula="+".join(f"{col}{row_num}" for col in annual_cols),
+                    formula=sum_formula(f"{col}{row_num}" for col in annual_cols),
                     style=currency_style,
                     formula_value=cached_value(annual_total),
                 ),
                 cell(
                     f"{column_name(total_col_start + 3)}{row_num}",
-                    formula="+".join(f"{col}{row_num}" for col in one_time_cols),
+                    formula=sum_formula(f"{col}{row_num}" for col in one_time_cols),
                     style=currency_style,
                     formula_value=cached_value(one_time_total),
                 ),

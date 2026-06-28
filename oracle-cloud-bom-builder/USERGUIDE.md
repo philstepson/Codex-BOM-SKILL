@@ -242,6 +242,8 @@ For one-time service rows, the workbook leaves monthly cost blank and calculates
 Part Qty * Instance Qty * Unit Price * (1 - normalized Discount %)
 ```
 
+Multi-environment row totals use `SUM(...)` formulas across environment columns so blank recurring cells on one-time service rows calculate as zero instead of surfacing spreadsheet `#VALUE!` errors.
+
 ## Current Generated BOMs
 
 The current repo output includes these generated BOMs:

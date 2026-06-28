@@ -80,6 +80,10 @@ def find_wide_header_row(cells: dict[str, str]) -> int | None:
     return None
 
 
+def has_direct_addition_formula(cells: dict[str, str]) -> bool:
+    return any(re.fullmatch(r"=[A-Z]+\d+(\+[A-Z]+\d+)+", value) for value in cells.values())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate an Oracle Cloud BOM workbook.")
     parser.add_argument("workbook", type=Path)
@@ -109,6 +113,8 @@ def main() -> None:
         fail("Missing PAAS discount formula")
     if "Environment Summary" not in cells.values():
         fail("PAAS sheet missing environment summary block")
+    if has_direct_addition_formula(cells):
+        fail("PAAS row total formulas should use SUM(...) so blank formula results do not produce #VALUE!")
     if "Disclaimer:" not in " ".join(cells.values()):
         fail("Missing estimate disclaimer")
 
@@ -142,6 +148,8 @@ def main() -> None:
         fail("Customer BOM missing environment summary formulas")
     if "All Environments" not in customer_cells.values():
         fail("Customer BOM missing all-environments total row")
+    if has_direct_addition_formula(customer_cells):
+        fail("Customer BOM row total formulas should use SUM(...) so blank formula results do not produce #VALUE!")
     sheet2_xml = read_text(args.workbook, "xl/worksheets/sheet2.xml")
     auto_filter_index = sheet2_xml.find("<autoFilter")
     merge_cells_index = sheet2_xml.find("<mergeCells")

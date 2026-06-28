@@ -106,6 +106,7 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 - Discounted monthly cost formula: `Monthly Cost * (1 - normalized Discount %)`, where values greater than `1` are divided by `100`.
 - Discounted annual cost formula: `Discounted Monthly Cost * 12`.
 - If row-level monthly cost is missing but quantity and unit price are present, calculate monthly list cost as `Part Qty * Instance Qty * Usage Qty * Unit Price`.
+- Multi-environment row totals should use `SUM(...)` across environment columns, not direct `A+B+C` addition, so blank formula results on one-time-only rows are treated as zero.
 - Do not invent Oracle SKU pricing. Ask for pricing input or leave fields blank when pricing is unavailable.
 - If the user asks for current Oracle pricing and does not provide it, use only current Oracle sources or the Oracle Cost Estimator, and cite the source used.
 - Do not use pricing embedded in legacy sample workbooks as authoritative current pricing. Those workbooks are layout and process references unless their price-list sheets have been refreshed and date-verified for the active run.
@@ -121,6 +122,7 @@ Before finalizing the workbook, confirm:
 - Discounted monthly and annual totals update from formulas.
 - Discounted totals include cached formula values and workbook calculation properties force automatic recalculation on open.
 - One-time service rows are excluded from recurring monthly cost and included once in discounted annual cost when requested.
+- Row total formulas use `SUM(...)` across environment columns and do not emit `#VALUE!` when an environment-specific recurring or one-time cell is blank.
 - Original list-price values remain visible.
 - Customer-facing proposal views show all SKUs, quantities, and list prices, and omit discounts when the user asks for list-price-only customer output.
 - `System Summary` shows requested ECPUs separately from configured platform capacity, and groups capacity characteristics by environment.

@@ -138,6 +138,8 @@ For one-time service SKUs that should be added to the annual estimate but not re
 
 `=IF(OR(C7="",D7="",F7=""),"",C7*D7*F7*(1-IF($K$3>1,$K$3/100,$K$3)))`
 
+For grouped environment layouts, calculate row totals with `SUM(...)` over the environment columns instead of direct addition. For example, use `=SUM(H10,N10,T10)` rather than `=H10+N10+T10` so one-time-only rows with blank recurring formulas do not recalculate to `#VALUE!`.
+
 ## Calculation Cache
 
 The workbook builder should write cached values into formula cells for row-level discounted monthly cost, row-level discounted annual cost, monthly total, discounted monthly total, and discounted annual total. These cached values are based on the initial discount supplied to the builder.
