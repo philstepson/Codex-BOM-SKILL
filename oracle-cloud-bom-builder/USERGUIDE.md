@@ -122,19 +122,27 @@ Do not treat pricing embedded in a historical Excel BOM sample as current. Use t
 Use the pricing refresh preflight before finalizing a BOM that depends on calculator exports or eSource PDF rows:
 
 ```bash
-python3 scripts/check_pricing_refresh.py \
+.venv/bin/python scripts/check_pricing_refresh.py \
   --input-csv inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv \
-  --current-esource-date "June 11, 2026"
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf
 ```
 
-The script checks the eSource cache metadata, confirms the cached PDF exists, compares the authenticated live eSource document date when supplied, scans input CSV source notes for calculator and eSource usage, and warns when standard Dedicated/Database@ Exadata rows appear to rely on eSource instead of calculator exports.
+The script checks the eSource cache metadata, confirms the cached PDF exists, extracts the date from the authenticated eSource PDF you downloaded, scans input CSV source notes for calculator and eSource usage, and warns when standard Dedicated/Database@ Exadata rows appear to rely on eSource instead of calculator exports.
+
+If the downloaded eSource PDF is newer than the managed cache, refresh the cache from the validated download before extracting rows:
+
+```bash
+.venv/bin/python scripts/check_pricing_refresh.py \
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf \
+  --refresh-cache-from-download
+```
 
 For Exadata X11 storage-server, Database Server-Z, XT, and Recovery Appliance RA26/RA26-Z-related rows introduced by Oracle's June 30, 2026 announcement, use current Oracle pricing calculator/export rows when they expose the SKU and pricing. If pricing from eSource instead, require the July 1, 2026 eSource price list or newer:
 
 ```bash
-python3 scripts/check_pricing_refresh.py \
+.venv/bin/python scripts/check_pricing_refresh.py \
   --input-csv /tmp/exadata-x11-or-ra26-rows.csv \
-  --current-esource-date "July 1, 2026" \
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf \
   --minimum-esource-date "July 1, 2026"
 ```
 
@@ -160,7 +168,7 @@ When you provide a SKU like this, the skill should:
 
 1. Treat the SKU as an explicit BOM row request.
 2. Search the verified current Oracle eSource price-list PDF by exact SKU first.
-3. Use a persisted PDF cache only after checking the live eSource document date and replacing the cache if the live PDF is newer.
+3. Use a persisted PDF cache only after checking a freshly downloaded eSource PDF and replacing the cache if the downloaded PDF is newer.
 4. Preserve the exact price-list SKU, description, unit price or monthly/list amount, billing basis, and document date in the workbook.
 5. Ask for quantity when it is not obvious; default to `1` only when you ask for a single add-on service and no other quantity context is present.
 6. Add a `Custom Note` explaining that the row came from the Oracle eSource PDF and whether it is a one-time or non-metered service item when the price-list basis indicates that.
@@ -177,7 +185,7 @@ Current supplemental source:
 
 `https://esource.oraclecorp.com/sites/eSource/ContentAsset_1530207473152`
 
-Use browser authentication to open the current PDF. A local PDF cache may be kept for repeatability, but it must be checked against eSource before each pricing run. If the eSource document date is newer than the cached document date, replace the cached PDF before extracting rows.
+Use browser authentication to open the current PDF, then download the PDF and validate it locally. Do not depend on Chrome extension access to Oracle's PDF viewer for this workflow. A local PDF cache may be kept for repeatability, but it must be checked against the downloaded current eSource PDF before each pricing run. If the downloaded eSource document date is newer than the cached document date, replace the cached PDF before extracting rows.
 
 Do not treat the cached PDF as authoritative until the eSource date check passes. Extract only the rows needed for the active BOM into a temporary CSV.
 
@@ -301,8 +309,8 @@ The validator checks table structure, discount formulas, total formulas, custome
 2. Ask for only the missing sizing details.
 3. Determine calculator coverage first. For standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, Database@AWS, and most non-Cloud@Customer OCI services, create or obtain the Oracle pricing calculator configuration first and use its BOM rows as the input rows.
 4. Build an estimator-style input CSV when needed.
-5. Open the current eSource PDF through browser authentication only if calculator pricing is incomplete/unavailable or the request is Exadata Cloud@Customer.
-6. Compare the eSource document date with the cached PDF metadata and replace the cache if eSource is newer.
+5. Open and download the current eSource PDF through browser authentication only if calculator pricing is incomplete/unavailable or the request is Exadata Cloud@Customer.
+6. Compare the downloaded eSource document date with the cached PDF metadata and replace the cache if the download is newer.
 7. Extract only required supplemental pricing rows into a temporary CSV from the verified current PDF.
 8. Generate the workbook.
 9. Validate the workbook.

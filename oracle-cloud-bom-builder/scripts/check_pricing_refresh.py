@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import re
+import shutil
 import sys
 import warnings
 from dataclasses import dataclass
@@ -68,22 +69,66 @@ def load_metadata(path: Path) -> tuple[dict[str, object], list[Finding]]:
 def extract_pdf_date(pdf_path: Path) -> tuple[str, list[Finding]]:
     findings: list[Finding] = []
     if not pdf_path.exists():
-        return "", [Finding("FAIL", f"Cached eSource PDF not found: {pdf_path}")]
+        return "", [Finding("FAIL", f"eSource PDF not found: {pdf_path}")]
+    text = ""
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             from pypdf import PdfReader  # type: ignore
+        try:
+            reader = PdfReader(str(pdf_path))
+            text = "\n".join((page.extract_text() or "") for page in reader.pages[:3])
+        except Exception as exc:
+            findings.append(Finding("WARN", f"Could not extract eSource PDF text with pypdf: {exc}"))
     except Exception:
-        return "", [Finding("WARN", "pypdf is unavailable; skipped cached PDF document-date extraction")]
-    try:
-        reader = PdfReader(str(pdf_path))
-        text = "\n".join((page.extract_text() or "") for page in reader.pages[:3])
-    except Exception as exc:
-        return "", [Finding("WARN", f"Could not extract cached PDF text: {exc}")]
+        findings.append(Finding("WARN", "pypdf is unavailable; trying pdfplumber for eSource PDF document-date extraction"))
+    if not text:
+        try:
+            import pdfplumber  # type: ignore
+
+            with pdfplumber.open(str(pdf_path)) as pdf:
+                text = "\n".join((page.extract_text() or "") for page in pdf.pages[:3])
+        except Exception as exc:
+            findings.append(Finding("WARN", f"Could not extract eSource PDF text with pdfplumber: {exc}"))
+    if not text:
+        return "", findings
     match = re.search(r"Last\s+updated\s*:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})", text, re.IGNORECASE)
     if not match:
-        return "", [Finding("WARN", "Could not find 'Last updated' date in cached eSource PDF text")]
+        findings.append(Finding("WARN", "Could not find 'Last updated' date in eSource PDF text"))
+        return "", findings
     return match.group(1), findings
+
+
+def refresh_cache_from_download(
+    downloaded_pdf: Path,
+    cached_pdf: Path,
+    metadata_path: Path,
+    metadata: dict[str, object],
+    downloaded_date_text: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if not downloaded_date_text:
+        return [Finding("FAIL", "Cannot refresh eSource cache because the downloaded PDF document date was not extracted.")]
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(downloaded_pdf, cached_pdf)
+    updated_metadata = dict(metadata)
+    updated_metadata.update(
+        {
+            "source_url": str(updated_metadata.get("source_url") or ESOURCE_URL),
+            "document_title": str(updated_metadata.get("document_title") or downloaded_pdf.name),
+            "document_date": downloaded_date_text,
+            "retrieved_at": date.today().isoformat(),
+            "cached_file": cached_pdf.name,
+            "verification_note": (
+                f"User-downloaded eSource PDF validated by scripts/check_pricing_refresh.py; "
+                f"front-page text showed Last updated: {downloaded_date_text} before cache copy."
+            ),
+        }
+    )
+    metadata_path.write_text(json.dumps(updated_metadata, indent=2) + "\n", encoding="utf-8")
+    findings.append(Finding("PASS", f"Refreshed eSource cache from downloaded PDF: {downloaded_pdf} -> {cached_pdf}"))
+    findings.append(Finding("PASS", f"Updated eSource cache metadata: {metadata_path}"))
+    return findings
 
 
 def row_text(row: dict[str, str]) -> str:
@@ -162,7 +207,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check Oracle BOM pricing-source freshness.")
     parser.add_argument("--input-csv", action="append", type=Path, default=[], help="BOM CSV input to inspect. Repeat for multiple files.")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA, help="eSource cache metadata JSON path.")
-    parser.add_argument("--current-esource-date", default="", help="Live eSource PDF date read from authenticated browser, e.g. 'June 11, 2026'.")
+    parser.add_argument("--downloaded-esource-pdf", type=Path, help="Current eSource PDF manually downloaded from the authenticated browser session.")
+    parser.add_argument("--refresh-cache-from-download", action="store_true", help="Copy --downloaded-esource-pdf into the managed cache and update metadata after date extraction.")
+    parser.add_argument("--current-esource-date", default="", help="Current eSource PDF date, normally extracted from --downloaded-esource-pdf. Manual fallback, e.g. 'June 11, 2026'.")
     parser.add_argument("--minimum-esource-date", default="", help="Required minimum eSource PDF date for rows that depend on newly announced products, e.g. 'July 1, 2026'.")
     parser.add_argument("--downloads-dir", type=Path, default=DEFAULT_DOWNLOADS, help="Directory to inspect for recent calculator exports.")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
@@ -182,7 +229,31 @@ def main() -> None:
         if pdf_date and metadata_date and pdf_date != metadata_date:
             findings.append(Finding("FAIL", f"Cached PDF date {date_label(pdf_date)} does not match metadata date {date_label(metadata_date)}"))
 
-    live_date = parse_date(args.current_esource_date) if args.current_esource_date else None
+    downloaded_date_text = ""
+    downloaded_date = None
+    if args.downloaded_esource_pdf:
+        downloaded_date_text, downloaded_findings = extract_pdf_date(args.downloaded_esource_pdf)
+        findings.extend(downloaded_findings)
+        downloaded_date = parse_date(downloaded_date_text) if downloaded_date_text else None
+        if downloaded_date_text and not downloaded_date:
+            findings.append(Finding("FAIL", f"Could not parse downloaded eSource PDF date: {downloaded_date_text}"))
+        if downloaded_date and metadata_date:
+            if downloaded_date > metadata_date:
+                level = "INFO" if args.refresh_cache_from_download else "FAIL"
+                findings.append(Finding(level, f"Downloaded eSource PDF date {date_label(downloaded_date)} is newer than cached metadata date {date_label(metadata_date)}; refresh the cached PDF before pricing."))
+            else:
+                findings.append(Finding("PASS", f"Downloaded eSource PDF date {date_label(downloaded_date)} is not newer than cached metadata date {date_label(metadata_date)}."))
+        if args.refresh_cache_from_download:
+            target_pdf = cached_pdf or args.metadata.parent / "oracle-paas-iaas-public-cloud-global-price-list.pdf"
+            findings.extend(refresh_cache_from_download(args.downloaded_esource_pdf, target_pdf, args.metadata, metadata, downloaded_date_text))
+            metadata, metadata_findings_after_refresh = load_metadata(args.metadata)
+            findings.extend(metadata_findings_after_refresh)
+            metadata_date = parse_date(str(metadata.get("document_date", ""))) if metadata else None
+            cached_pdf = args.metadata.parent / str(metadata["cached_file"]) if metadata.get("cached_file") else target_pdf
+    elif args.refresh_cache_from_download:
+        findings.append(Finding("FAIL", "--refresh-cache-from-download requires --downloaded-esource-pdf"))
+
+    live_date = downloaded_date or (parse_date(args.current_esource_date) if args.current_esource_date else None)
     minimum_date = parse_date(args.minimum_esource_date) if args.minimum_esource_date else None
     if args.current_esource_date and not live_date:
         findings.append(Finding("FAIL", f"Could not parse --current-esource-date: {args.current_esource_date}"))
@@ -190,9 +261,9 @@ def main() -> None:
         findings.append(Finding("FAIL", f"Could not parse --minimum-esource-date: {args.minimum_esource_date}"))
     if live_date and metadata_date:
         if live_date > metadata_date:
-            findings.append(Finding("FAIL", f"Live eSource date {date_label(live_date)} is newer than cached metadata date {date_label(metadata_date)}; refresh the cached PDF before pricing."))
+            findings.append(Finding("FAIL", f"Current eSource date {date_label(live_date)} is newer than cached metadata date {date_label(metadata_date)}; refresh the cached PDF before pricing."))
         else:
-            findings.append(Finding("PASS", f"Live eSource date {date_label(live_date)} is not newer than cached metadata date {date_label(metadata_date)}."))
+            findings.append(Finding("PASS", f"Current eSource date {date_label(live_date)} is not newer than cached metadata date {date_label(metadata_date)}."))
     if minimum_date:
         effective_date = live_date or metadata_date
         if not effective_date:
@@ -213,7 +284,7 @@ def main() -> None:
         report = scan_csv(path)
         csv_reports.append(report)
         if int(report["esource_rows"]) and not live_date:
-            findings.append(Finding("WARN", f"{path}: uses eSource-priced rows; provide --current-esource-date from the authenticated PDF before final pricing."))
+            findings.append(Finding("WARN", f"{path}: uses eSource-priced rows; provide --downloaded-esource-pdf or --current-esource-date before final pricing."))
         if int(report["standard_exadata_esource_rows"]):
             findings.append(Finding("WARN", f"{path}: standard Dedicated/Database@ Exadata rows mention eSource; prefer calculator export rows when calculator coverage exists."))
         dates = report["esource_dates"]
@@ -233,7 +304,8 @@ def main() -> None:
     print(f"Metadata: {args.metadata}")
     print(f"Cached PDF: {cached_pdf if cached_pdf else 'not recorded'}")
     print(f"Cached document date: {metadata.get('document_date', 'unknown') if metadata else 'unknown'}")
-    print(f"Live eSource date supplied: {args.current_esource_date or 'not supplied'}")
+    print(f"Downloaded eSource PDF: {args.downloaded_esource_pdf or 'not supplied'}")
+    print(f"Downloaded/current eSource date: {downloaded_date_text or args.current_esource_date or 'not supplied'}")
     print(f"Minimum eSource date required: {args.minimum_esource_date or 'not supplied'}")
     print()
     print("CSV source scan:")

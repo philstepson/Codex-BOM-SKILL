@@ -15,35 +15,43 @@ A local PDF cache may be persisted for repeatability, but eSource remains author
 
 Before each pricing run:
 
-1. Open the eSource URL in the authenticated browser session.
-2. Read the document date printed in the eSource PDF.
-3. Read the document date recorded for the cached PDF, preferably from adjacent metadata.
-4. If the eSource date is newer, download or save the current eSource PDF and replace the cached PDF.
+1. Open the eSource URL in Chrome with the user's authenticated Oracle session.
+2. Download the current eSource PDF from Chrome instead of relying on browser/PDF-viewer automation.
+3. Run the repository preflight against the downloaded PDF so the script extracts the printed document date.
+4. If the downloaded PDF date is newer than the cached metadata, refresh the managed cache from the downloaded PDF.
 5. Update the cache metadata with the eSource URL, document date, retrieval date, and cached filename.
-6. Extract pricing rows only from the verified current PDF.
+6. Extract pricing rows only from the verified current cached PDF.
 
-If the current eSource date cannot be read, do not silently reuse the cached PDF. Ask the user whether to proceed from the cached PDF and label the output as using an unverified cached source.
+Do not depend on Chrome extension access to Oracle's PDF viewer as the normal workflow. The supported path is manual download from the authenticated browser session followed by local PDF validation. If the current eSource PDF cannot be downloaded or its date cannot be extracted, do not silently reuse the cached PDF. Ask the user whether to proceed from the cached PDF and label the output as using an unverified cached source.
 
 For new Exadata X11 storage-server rows, Exadata X11M XT rows, Exadata Database Server-Z rows, and RA26/RA26-Z-related rows, prefer current Oracle pricing calculator/export rows when they expose the SKU and pricing. If the current customer-facing calculator/site exposes a SKU before eSource reflects it, use the calculator/site row and preserve that source in the BOM note. If using eSource, do not use the June 11, 2026 cache. Refresh to the July 1, 2026 eSource PDF or newer before extracting SKU, billing-basis, or price values. The July 1, 2026 PaaS/IaaS price list did not expose RA26/RA26-Z hardware SKU rows by exact text search.
 
 Use the repository preflight script to enforce this check when preparing a BOM:
 
 ```bash
-python3 scripts/check_pricing_refresh.py \
+.venv/bin/python scripts/check_pricing_refresh.py \
   --input-csv inputs/multi-env-standard-cc-prod-dr-oci-nonprod.csv \
-  --current-esource-date "June 11, 2026"
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf
+```
+
+When the downloaded PDF is newer than the managed cache, refresh the cache from the same validated download:
+
+```bash
+.venv/bin/python scripts/check_pricing_refresh.py \
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf \
+  --refresh-cache-from-download
 ```
 
 For eSource-priced rows that depend on the June 30, 2026 Exadata announcement, require the July 1, 2026 price list:
 
 ```bash
-python3 scripts/check_pricing_refresh.py \
+.venv/bin/python scripts/check_pricing_refresh.py \
   --input-csv /tmp/exadata-x11-or-ra26-rows.csv \
-  --current-esource-date "July 1, 2026" \
+  --downloaded-esource-pdf ~/Downloads/ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf \
   --minimum-esource-date "July 1, 2026"
 ```
 
-`--current-esource-date` should be the date read from the authenticated eSource PDF in the browser. If the live date is newer than the cache metadata, refresh the PDF cache before extracting or reusing any supplemental rows.
+`--downloaded-esource-pdf` should point to the current PDF downloaded from the authenticated eSource page. The script extracts the document date from the PDF front page. `--current-esource-date` remains available as a manual fallback when the date is known but PDF extraction is not possible. If the downloaded/current date is newer than the cache metadata, refresh the PDF cache before extracting or reusing any supplemental rows.
 
 ## Recommended Local Layout
 
