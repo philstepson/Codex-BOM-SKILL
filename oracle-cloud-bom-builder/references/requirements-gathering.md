@@ -19,6 +19,7 @@ Ask these when missing:
 - Whether pricing should be list-price only, discounted estimate, or both.
 - Whether the customer-facing BOM should show list price only. If yes, keep discount calculations out of the customer-facing view.
 - Any explicit add-on SKUs the user wants included, including service, installation, activation, or other non-product price-list rows.
+- Whether any requested Exadata rows are newly announced Exadata X11 storage-server, Database Server-Z, XT, or Recovery Appliance RA26/RA26-Z-related rows that should be sourced from the current Oracle pricing calculator/export when available, or from the July 1, 2026 eSource price list or newer when calculator coverage is missing.
 
 ## Environment Modeling
 
@@ -60,6 +61,7 @@ For Exadata Database Service, also ask:
 - Number of storage servers.
 - Database server model/SKU when known, especially for Exadata Cloud@Customer.
 - Storage server model/SKU when known, especially for Exadata Cloud@Customer.
+- Storage server generation and feature set when known, such as X11M with XRMEM or X11 without XRMEM.
 - Rack configuration, expansion rack details, or other Cloud@Customer infrastructure components when applicable.
 - ECPU quantity.
 - Dedicated infrastructure or Cloud@Customer.
@@ -80,7 +82,7 @@ For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cl
 
 - Base System or elastic configuration.
 - Database server type: Base, Standard, Large, or Extra Large.
-- Storage server type: Base, High Capacity, or Extreme Flash.
+- Storage server type and generation: Base, High Capacity, Extreme Flash, X11M with XRMEM, or X11 without XRMEM where supported.
 - Database server count and storage server count.
 - Whether the design is single-rack or multi-rack.
 - Storage redundancy: High redundancy or Normal redundancy. Default to High when unspecified.
@@ -91,6 +93,18 @@ For Exadata Database Service on Cloud@Customer X11M, read `references/exadata-cl
 - License model: License Included or Bring Your Own License.
 - Network option for database servers and control plane servers, if the BOM covers rack or facilities inputs.
 - Whether installation and activation should be included as a one-time annual-cost row, such as `B91390`.
+
+For on-premises Exadata Database Machine X11M, Exadata Storage Expansion Rack X11M, Exadata X11 storage-server additions, Database Server-Z, XT storage, or Zero Data Loss Recovery Appliance RA26/RA26-Z, read `references/exadata-database-machine-x11m.md` and gather:
+
+- Deployment type: on-premises Exadata Database Machine, Storage Expansion Rack, Cloud@Customer storage expansion, or Recovery Appliance.
+- Database server type and count, including whether Database Server-Z is in scope.
+- Storage server type and count: X11M HC/EF/HC-Z with XRMEM, X11 HC/EF/HC-Z without XRMEM, or XT.
+- Whether the storage row is an initial deployment, expansion of an existing storage type, or a new storage type added to the system.
+- Redundancy target: High or Normal.
+- Required Exadata System Software release eligibility when X11 storage servers are involved.
+- For RA26 and RA26-Z, base rack versus full rack and target usable capacity.
+
+Use current Oracle pricing calculator/export rows when they expose newly announced Exadata X11 storage-server SKUs and prices. If calculator coverage is missing, use the July 1, 2026 eSource price list or newer. The July 1, 2026 PaaS/IaaS price list in this repository did not expose RA26/RA26-Z hardware SKU rows, so leave RA26 hardware SKU and price fields blank or ask for a current Recovery Appliance calculator/export row, price-list row, or formal quote source.
 
 For a Cloud@Customer X11M Base rack request, use the Base System Rack row when pricing is available. Keep separately requested storage-server type and quantity explicit. A Base rack with High Capacity storage servers should show the Base rack SKU and the High Capacity storage SKU as separate rows rather than hiding the storage selection in the rack row.
 
@@ -187,7 +201,7 @@ When the user cannot answer a required pricing parameter:
 - Add a note explaining the missing input.
 - Preserve formulas where possible so values calculate after the missing inputs are entered.
 
-Do not invent Oracle SKU prices. Use date-checked authenticated Oracle eSource price-list rows, user-provided Oracle Cost Estimator data, or authenticated Oracle pricing calculator output only when explicitly requested and verified. Public pricing pages may help identify candidate SKUs, but they are not pricing authority for customer BOMs.
+Do not invent Oracle SKU prices. Use current Oracle customer-facing pricing calculator/site output, user-provided Oracle Cost Estimator data, authenticated Oracle pricing calculator output, or date-checked authenticated Oracle eSource price-list rows when verified. Generic public marketing pages may help identify candidate SKUs, but they are not pricing authority for customer BOMs unless they are the actual Oracle pricing calculator/site output for the configured service.
 
 Legacy or sample Excel BOMs may contain stale embedded price-list sheets. Use those files as layout, formula, and workflow references only unless their pricing tabs have been refreshed from a current Oracle source and date-verified for the active BOM.
 

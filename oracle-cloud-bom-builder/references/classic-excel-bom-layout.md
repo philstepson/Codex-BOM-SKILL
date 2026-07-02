@@ -180,7 +180,7 @@ The sample workbook's embedded pricing is historical. Treat it as a schema examp
 For current BOM generation:
 
 - Use the Oracle pricing calculator or Cost Estimator export as the source of truth when it can produce the requested SKU rows and prices.
-- Use current authenticated Oracle eSource PDF pricing only for Exadata Cloud@Customer gaps or explicit SKUs that are unavailable from the calculator.
+- Use current authenticated Oracle eSource PDF pricing only for Exadata Cloud@Customer gaps, explicit SKUs, or price-list-only rows that are unavailable from the calculator.
 - Refresh or date-check any persisted eSource PDF before extracting prices.
 - Do not reuse the sample workbook's `Cloud Price List`, `Exadata Price List`, `License Price List`, or external links as authoritative current pricing.
 - Preserve source date, pricing source, and billing basis in row notes for any price-list-sourced rows.

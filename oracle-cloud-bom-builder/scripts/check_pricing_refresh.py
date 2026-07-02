@@ -163,6 +163,7 @@ def main() -> None:
     parser.add_argument("--input-csv", action="append", type=Path, default=[], help="BOM CSV input to inspect. Repeat for multiple files.")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA, help="eSource cache metadata JSON path.")
     parser.add_argument("--current-esource-date", default="", help="Live eSource PDF date read from authenticated browser, e.g. 'June 11, 2026'.")
+    parser.add_argument("--minimum-esource-date", default="", help="Required minimum eSource PDF date for rows that depend on newly announced products, e.g. 'July 1, 2026'.")
     parser.add_argument("--downloads-dir", type=Path, default=DEFAULT_DOWNLOADS, help="Directory to inspect for recent calculator exports.")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
     args = parser.parse_args()
@@ -182,13 +183,24 @@ def main() -> None:
             findings.append(Finding("FAIL", f"Cached PDF date {date_label(pdf_date)} does not match metadata date {date_label(metadata_date)}"))
 
     live_date = parse_date(args.current_esource_date) if args.current_esource_date else None
+    minimum_date = parse_date(args.minimum_esource_date) if args.minimum_esource_date else None
     if args.current_esource_date and not live_date:
         findings.append(Finding("FAIL", f"Could not parse --current-esource-date: {args.current_esource_date}"))
+    if args.minimum_esource_date and not minimum_date:
+        findings.append(Finding("FAIL", f"Could not parse --minimum-esource-date: {args.minimum_esource_date}"))
     if live_date and metadata_date:
         if live_date > metadata_date:
             findings.append(Finding("FAIL", f"Live eSource date {date_label(live_date)} is newer than cached metadata date {date_label(metadata_date)}; refresh the cached PDF before pricing."))
         else:
             findings.append(Finding("PASS", f"Live eSource date {date_label(live_date)} is not newer than cached metadata date {date_label(metadata_date)}."))
+    if minimum_date:
+        effective_date = live_date or metadata_date
+        if not effective_date:
+            findings.append(Finding("FAIL", f"Required minimum eSource date is {date_label(minimum_date)}, but no live or cached eSource date is available."))
+        elif effective_date < minimum_date:
+            findings.append(Finding("FAIL", f"Effective eSource date {date_label(effective_date)} is older than required minimum {date_label(minimum_date)}."))
+        else:
+            findings.append(Finding("PASS", f"Effective eSource date {date_label(effective_date)} satisfies required minimum {date_label(minimum_date)}."))
 
     csv_paths = args.input_csv
     if not csv_paths:
@@ -222,6 +234,7 @@ def main() -> None:
     print(f"Cached PDF: {cached_pdf if cached_pdf else 'not recorded'}")
     print(f"Cached document date: {metadata.get('document_date', 'unknown') if metadata else 'unknown'}")
     print(f"Live eSource date supplied: {args.current_esource_date or 'not supplied'}")
+    print(f"Minimum eSource date required: {args.minimum_esource_date or 'not supplied'}")
     print()
     print("CSV source scan:")
     for report in csv_reports:

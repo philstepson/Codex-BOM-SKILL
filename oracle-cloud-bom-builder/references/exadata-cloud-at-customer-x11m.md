@@ -5,8 +5,12 @@ Use this reference when preparing or validating BOM rows for Oracle Exadata Data
 - `exadb-cc-x11m-ds.pdf`: `Exadata Database Service on Cloud@Customer X11M`, Version 1.4, Oracle public datasheet, copyright 2026.
 - `/Users/PWSTEPHE/Downloads/exadb-cc-x11m-ds (1).pdf`: same public datasheet, Version 1.4, 13 pages, ingested 2026-06-26.
 - `ExaC@C X11M-config.pptx`: `Exadata Cloud@Customer X11M Technical Overview`, Oracle Exadata Product Management, April 2026.
+- `Announcing Oracle Exadata X11 Storage Servers and Zero Data Loss Recovery Appliance RA26_RA26-Z _ exadata.pdf`: Oracle Exadata Product Management blog print, June 30, 2026.
+- `ORACLE+PAAS+AND+IAAS+PUBLIC+CLOUD+GLOBAL+PRICE+LIST.pdf`: Oracle PaaS and IaaS Public Cloud Global Price List, `Last updated: July 1, 2026`.
 
 This reference captures configuration rules and sizing facts that affect BOM preparation. It is not a pricing source.
+
+For current Cloud@Customer X11/X11M price-list rows, read `references/exadata-database-machine-x11m.md`. It includes July 1, 2026 eSource rows for X11M Extreme Flash, X11 High Capacity, X11 Extreme Flash, data/device retention, and partner-hardware variants.
 
 ## Configuration Rules
 
@@ -20,7 +24,10 @@ This reference captures configuration rules and sizing facts that affect BOM pre
 - Expansion racks require at least 4 servers.
 - Minimum expansion-rack configuration starts with 1 storage server plus at least 3 additional database or storage servers.
 - Database server choices are Base, Standard, Large, and Extra Large.
-- Storage server choices are Base, High Capacity, and Extreme Flash.
+- Storage server choices are Base, High Capacity, and Extreme Flash from the Cloud@Customer X11M datasheet.
+- The June 30, 2026 Oracle announcement adds Exadata X11 High Capacity and X11 Extreme Flash storage servers for Cloud@Customer with Exadata X11M and later database servers. X11 storage servers do not include XRMEM unless memory is added later.
+- Exadata X11 High Capacity-Z is available for on-premises Exadata Database Machine, not Cloud@Customer, based on the June 30, 2026 announcement.
+- The storage server model selected when the Cloud@Customer system is initially deployed determines the storage server model that can be added for future storage expansions.
 - Any database server type can be combined with any storage server type.
 - All database servers in one system must be the same type.
 - All storage servers in one system must be the same type.
@@ -29,6 +36,7 @@ This reference captures configuration rules and sizing facts that affect BOM pre
 - Standard, Large, and Extra Large database servers include XRMEM; Base database servers do not.
 - Extreme Flash storage includes flash cache and flash storage.
 - High Capacity storage includes flash cache and disk storage.
+- X11M HC, EF, and HC-Z storage includes XRMEM. X11 HC, EF, and HC-Z storage does not include XRMEM unless memory is added later.
 - Usable storage capacity is after ASM high redundancy and drive-failure recovery overhead, before database compression.
 - Additional database servers increase available database compute capacity, including usable memory and database cores/ECPUs.
 - Three storage servers are the minimum storage-server count because three storage subsystems are required for high redundancy.
@@ -122,10 +130,13 @@ When a BOM includes Exadata Cloud@Customer X11M:
 
 - Capture the database server type and count.
 - Capture the storage server type and count.
+- Capture storage generation and XRMEM assumption: X11M with XRMEM, or X11 without XRMEM unless a memory expansion is included.
 - Treat 2 database servers as the baseline physical rack population for each rack.
 - Confirm whether the design is the Base System or an elastic configuration.
 - Reject or flag mixed database server types in one system.
 - Reject or flag mixed storage server types in one system.
+- For Cloud@Customer storage expansions, confirm the added storage server model matches the model selected at initial deployment.
+- Flag X11 High Capacity-Z as on-premises only unless a later current Oracle source says it is available for Cloud@Customer.
 - Flag configurations below 2 database servers or below 3 storage servers.
 - Flag initial rack configurations above 16 total database plus storage servers unless the BOM explicitly includes a multi-rack design.
 - For expansion racks, flag fewer than 4 servers, more than 18 total servers, or no storage server.

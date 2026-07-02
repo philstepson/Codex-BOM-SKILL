@@ -16,6 +16,7 @@ Use the skill when you need:
 - A customer proposal-style workbook that can track multiple environments such as Production, Test/Dev, and Disaster Recovery.
 - A standard Exadata Dedicated Infrastructure, Database@Azure, Database@Google Cloud, or Database@AWS BOM based on Oracle pricing calculator rows.
 - Exadata Cloud@Customer BOM rows that include infrastructure resources not fully covered by the calculator.
+- On-premises Exadata Database Machine X11M, Exadata X11 storage-server, Exadata Storage Expansion Rack, or Recovery Appliance RA26/RA26-Z BOM rows that use current Oracle pricing calculator/export rows or verified eSource pricing.
 - Explicit SKU additions from the Oracle price list, including non-product service SKUs such as installation or activation services.
 - A configured-system summary sheet that explains requested and configured Exadata capacity.
 - An optional Draw.io-compatible block diagram for proposal discussion.
@@ -75,7 +76,7 @@ Useful details include:
 - Base System or elastic configuration.
 - Single-rack or multi-rack design.
 - Database server type: Base, Standard, Large, or Extra Large.
-- Storage server type: Base, High Capacity, or Extreme Flash.
+- Storage server type and generation: Base, High Capacity, Extreme Flash, X11M with XRMEM, or X11 without XRMEM where available.
 - Database server count and storage server count.
 - Expansion rack count and expansion rack server counts, when applicable.
 - Storage redundancy, defaulting to High unless Normal is explicitly specified.
@@ -85,6 +86,8 @@ Useful details include:
 - Default memory and storage assumptions, if applicable.
 
 For Exadata Database Service on Cloud@Customer X11M, the default test baseline is a single rack with 2 database servers and 3 storage servers. Model each rack as prepopulated with 2 database servers. Additional database servers increase usable memory and database cores/ECPUs.
+
+Exadata X11 High Capacity and X11 Extreme Flash storage servers are available for Exadata Cloud@Customer with Exadata X11M and later database servers. X11 storage servers do not include XRMEM unless separately upgraded; X11M storage servers include XRMEM and remain the highest-performance options. X11 High Capacity-Z is on-premises only based on the June 30, 2026 announcement. The storage server model selected when a Cloud@Customer system is initially deployed determines what can be added for future storage expansions.
 
 High redundancy is the default storage assumption. It keeps two mirrored copies of the original data and can survive two HDA failures. Normal redundancy provides more usable storage because it keeps one mirrored copy, but it only survives one HDA failure.
 
@@ -105,14 +108,14 @@ Create a BOM for an Exadata Cloud@Customer X11M single-rack baseline with 3 High
 
 The skill uses this pricing authority model:
 
-1. Current authenticated Oracle eSource price-list PDF, after document-date validation, is the definitive price list when exact rows are available.
-2. Oracle pricing calculator or Oracle Cost Estimator values supplied by the user, source file, or authenticated calculator session are authoritative for calculator-covered resources and are usually the easiest complete BOM source.
+1. Current Oracle customer-facing pricing calculator, Cost Estimator, or calculator export rows are authoritative for calculator-covered resources and are usually the easiest complete BOM source.
+2. Current authenticated Oracle eSource price-list PDF, after document-date validation, is an authoritative internal price-list source when exact rows are needed outside calculator coverage.
 3. User-provided estimator-style rows from an approved source can be used when their origin is clear.
 4. Blank editable price fields with notes when no approved source is available.
 
 The skill must not invent Oracle SKU pricing.
 
-For workflow efficiency, check whether the pricing calculator can produce the needed rows before asking for eSource authentication. If eSource is already available and date-checked, it is the definitive price list. If the calculator covers the row set, use the calculator/export rows for quantities and monthly costs. Public pricing pages, old workbook price tabs, and prior extracted files are not authoritative pricing sources.
+For workflow efficiency, check whether the pricing calculator can produce the needed rows before asking for eSource authentication. If the calculator covers the row set, use the calculator/export rows for SKUs, quantities, unit prices, and monthly costs. If a current Oracle customer-facing calculator/site exposes a new SKU or price before the latest eSource PDF reflects it, use that calculator/site output as the working BOM source and preserve the source name/date in row notes. Old workbook price tabs and prior extracted files are not authoritative pricing sources.
 
 Do not treat pricing embedded in a historical Excel BOM sample as current. Use those workbooks for format, environment layout, formulas, and proposal flow only unless their pricing sheets have been refreshed and date-verified for the active BOM.
 
@@ -125,6 +128,23 @@ python3 scripts/check_pricing_refresh.py \
 ```
 
 The script checks the eSource cache metadata, confirms the cached PDF exists, compares the authenticated live eSource document date when supplied, scans input CSV source notes for calculator and eSource usage, and warns when standard Dedicated/Database@ Exadata rows appear to rely on eSource instead of calculator exports.
+
+For Exadata X11 storage-server, Database Server-Z, XT, and Recovery Appliance RA26/RA26-Z-related rows introduced by Oracle's June 30, 2026 announcement, use current Oracle pricing calculator/export rows when they expose the SKU and pricing. If pricing from eSource instead, require the July 1, 2026 eSource price list or newer:
+
+```bash
+python3 scripts/check_pricing_refresh.py \
+  --input-csv /tmp/exadata-x11-or-ra26-rows.csv \
+  --current-esource-date "July 1, 2026" \
+  --minimum-esource-date "July 1, 2026"
+```
+
+The repository's older June 11, 2026 cache is not valid for those newly announced eSource-priced SKU rows. Calculator/export rows remain valid when generated from the current authenticated Oracle pricing calculator.
+
+## Exadata X11 And RA26 Inputs
+
+For on-premises Exadata Database Machine X11M or storage expansion BOMs, identify whether the row is for database servers, storage servers, Storage Expansion Rack, or another engineered-system component. X11 storage servers are lower-cost options without XRMEM; X11M storage servers include XRMEM. Capture the storage flavor: High Capacity, Extreme Flash, High Capacity-Z, or XT.
+
+For Recovery Appliance RA26 and RA26-Z, capture whether the request is RA26 or RA26-Z, base rack or full rack, and the usable-capacity target. RA26 base rack capacity is 332 TB and full rack capacity reaches 1.9 PB. RA26-Z base rack capacity is 164 TB and full rack capacity reaches 943 TB. Treat these as Zero Data Loss Recovery Appliance data-protection infrastructure rows, not Exadata Database Service rows. The July 1, 2026 PaaS/IaaS price list in this repository did not expose RA26/RA26-Z hardware SKU rows, so hardware pricing requires a current Recovery Appliance price-list row or formal quote source.
 
 ## Explicit SKU Additions
 
