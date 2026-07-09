@@ -510,8 +510,8 @@ def build_wide_environment_sheet(
     summary_currency_style = total_style + 1
     body_style = summary_currency_style + 1
     base_cols = 4
-    env_width = 8 if include_discount else 5
-    total_width = 7 if include_discount else 4
+    env_width = 10 if include_discount else 6
+    total_width = 9 if include_discount else 5
     group_header_row = 5
     table_header_row = 6
     data_start = 7
@@ -552,7 +552,7 @@ def build_wide_environment_sheet(
         labels = ["Qty", "Hrs", "Monthly List", "Annual List"]
         if include_discount:
             labels.extend(["Monthly Disc", "Annual Disc"])
-        labels.extend(["One-Time List", "One-Time Disc"] if include_discount else ["One-Time List"])
+        labels.extend(["One-Time List", "One-Time Disc", "Total Annual Cost", "Total Annual Disc Cost"] if include_discount else ["One-Time List", "Total Annual Cost"])
         for offset, label in enumerate(labels):
             header_cells.append(cell(f"{column_name(start_col + offset)}{table_header_row}", label, style=env_style))
     group_cells.append(cell(f"{column_name(total_col_start)}{group_header_row}", "All Environments", style=total_style))
@@ -560,15 +560,15 @@ def build_wide_environment_sheet(
     total_labels = ["Total Qty", "Total Monthly List", "Total Annual List"]
     if include_discount:
         total_labels.extend(["Total Monthly Disc", "Total Annual Disc"])
-    total_labels.extend(["Total One-Time List", "Total One-Time Disc"] if include_discount else ["Total One-Time List"])
+    total_labels.extend(["Total One-Time List", "Total One-Time Disc", "Total Annual Cost", "Total Annual Disc Cost"] if include_discount else ["Total One-Time List", "Total Annual Cost"])
     for offset, label in enumerate(total_labels):
         header_cells.append(cell(f"{column_name(total_col_start + offset)}{table_header_row}", label, style=total_style))
 
     env_totals = {
-        env: {"monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0}
+        env: {"monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0, "annual_cost": 0.0, "annual_disc_cost": 0.0}
         for env in environments
     }
-    all_totals = {"monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0}
+    all_totals = {"monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0, "annual_cost": 0.0, "annual_disc_cost": 0.0}
     data_rows: list[str] = []
 
     for offset, key in enumerate(order):
@@ -587,7 +587,7 @@ def build_wide_environment_sheet(
         annual_disc_cols: list[str] = []
         one_list_cols: list[str] = []
         one_disc_cols: list[str] = []
-        row_totals = {"qty": 0.0, "monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0}
+        row_totals = {"qty": 0.0, "monthly": 0.0, "annual": 0.0, "monthly_disc": 0.0, "annual_disc": 0.0, "one_list": 0.0, "one_disc": 0.0, "annual_cost": 0.0, "annual_disc_cost": 0.0}
 
         for env_index, environment in enumerate(environments):
             env_row = grouped[key].get(environment)
@@ -600,6 +600,8 @@ def build_wide_environment_sheet(
             annual_disc_col = column_name(start_col + 5) if include_discount else ""
             one_list_col = column_name(start_col + (6 if include_discount else 4))
             one_disc_col = column_name(start_col + 7) if include_discount else ""
+            annual_cost_col = column_name(start_col + (8 if include_discount else 5))
+            annual_disc_cost_col = column_name(start_col + 9) if include_discount else ""
             qty_cols.append(qty_col)
             monthly_cols.append(monthly_col)
             annual_cols.append(annual_col)
@@ -640,6 +642,8 @@ def build_wide_environment_sheet(
             else:
                 one_time_cache = None
             one_disc_cache = one_time_cache * (1 - normalized_discount) if one_time_cache is not None else None
+            annual_cost_cache = (annual_cache or 0.0) + (one_time_cache or 0.0)
+            annual_disc_cost_cache = (annual_disc_cache or 0.0) + (one_disc_cache or 0.0)
 
             row_totals["monthly"] += monthly_cache or 0.0
             row_totals["annual"] += annual_cache or 0.0
@@ -647,12 +651,16 @@ def build_wide_environment_sheet(
             row_totals["annual_disc"] += annual_disc_cache or 0.0
             row_totals["one_list"] += one_time_cache or 0.0
             row_totals["one_disc"] += one_disc_cache or 0.0
+            row_totals["annual_cost"] += annual_cost_cache
+            row_totals["annual_disc_cost"] += annual_disc_cost_cache
             env_totals[environment]["monthly"] += monthly_cache or 0.0
             env_totals[environment]["annual"] += annual_cache or 0.0
             env_totals[environment]["monthly_disc"] += monthly_disc_cache or 0.0
             env_totals[environment]["annual_disc"] += annual_disc_cache or 0.0
             env_totals[environment]["one_list"] += one_time_cache or 0.0
             env_totals[environment]["one_disc"] += one_disc_cache or 0.0
+            env_totals[environment]["annual_cost"] += annual_cost_cache
+            env_totals[environment]["annual_disc_cost"] += annual_disc_cost_cache
             cells.extend(
                 [
                     cell(f"{qty_col}{row_num}", quantity, style=body_style),
@@ -667,6 +675,9 @@ def build_wide_environment_sheet(
             cells.append(cell(f"{one_list_col}{row_num}", formula=one_list_formula, style=currency_style, formula_value=cached_value(one_time_cache)))
             if include_discount:
                 cells.append(cell(f"{one_disc_col}{row_num}", formula=one_disc_formula, style=currency_style, formula_value=cached_value(one_disc_cache)))
+            cells.append(cell(f"{annual_cost_col}{row_num}", formula=f"SUM({annual_col}{row_num},{one_list_col}{row_num})", style=currency_style, formula_value=cached_value(annual_cost_cache)))
+            if include_discount:
+                cells.append(cell(f"{annual_disc_cost_col}{row_num}", formula=f"SUM({annual_disc_col}{row_num},{one_disc_col}{row_num})", style=currency_style, formula_value=cached_value(annual_disc_cost_cache)))
 
         total_cells = [
             cell(f"{column_name(total_col_start)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in qty_cols), style=body_style, formula_value=cached_value(row_totals["qty"])),
@@ -683,6 +694,11 @@ def build_wide_environment_sheet(
         next_offset += 1
         if include_discount:
             total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=sum_formula(f"{col}{row_num}" for col in one_disc_cols), style=currency_style, formula_value=cached_value(row_totals["one_disc"])))
+            next_offset += 1
+        total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=f"SUM({column_name(total_col_start + 2)}{row_num},{column_name(total_col_start + (5 if include_discount else 3))}{row_num})", style=currency_style, formula_value=cached_value(row_totals["annual_cost"])))
+        next_offset += 1
+        if include_discount:
+            total_cells.append(cell(f"{column_name(total_col_start + next_offset)}{row_num}", formula=f"SUM({column_name(total_col_start + 4)}{row_num},{column_name(total_col_start + 6)}{row_num})", style=currency_style, formula_value=cached_value(row_totals["annual_disc_cost"])))
         cells.extend(total_cells)
         all_totals["monthly"] += row_totals["monthly"]
         all_totals["annual"] += row_totals["annual"]
@@ -690,6 +706,8 @@ def build_wide_environment_sheet(
         all_totals["annual_disc"] += row_totals["annual_disc"]
         all_totals["one_list"] += row_totals["one_list"]
         all_totals["one_disc"] += row_totals["one_disc"]
+        all_totals["annual_cost"] += row_totals["annual_cost"]
+        all_totals["annual_disc_cost"] += row_totals["annual_disc_cost"]
         data_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
 
     summary_rows = [
@@ -704,6 +722,8 @@ def build_wide_environment_sheet(
         annual_disc_col = column_name(start_col + 5) if include_discount else ""
         one_list_col = column_name(start_col + (6 if include_discount else 4))
         one_disc_col = column_name(start_col + 7) if include_discount else ""
+        annual_cost_col = column_name(start_col + (8 if include_discount else 5))
+        annual_disc_cost_col = column_name(start_col + 9) if include_discount else ""
         cells = [cell(f"A{row_num}", f"{environment} Total", style=summary_style)]
         cells.append(cell(f"{monthly_col}{row_num}", formula=f"SUM({monthly_col}{data_start}:{monthly_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["monthly"])))
         cells.append(cell(f"{annual_col}{row_num}", formula=f"SUM({annual_col}{data_start}:{annual_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["annual"])))
@@ -713,6 +733,9 @@ def build_wide_environment_sheet(
         cells.append(cell(f"{one_list_col}{row_num}", formula=f"SUM({one_list_col}{data_start}:{one_list_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["one_list"])))
         if include_discount:
             cells.append(cell(f"{one_disc_col}{row_num}", formula=f"SUM({one_disc_col}{data_start}:{one_disc_col}{data_end})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["one_disc"])))
+        cells.append(cell(f"{annual_cost_col}{row_num}", formula=f"SUM({annual_col}{row_num},{one_list_col}{row_num})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["annual_cost"])))
+        if include_discount:
+            cells.append(cell(f"{annual_disc_cost_col}{row_num}", formula=f"SUM({annual_disc_col}{row_num},{one_disc_col}{row_num})", style=summary_currency_style, formula_value=cached_value(env_totals[environment]["annual_disc_cost"])))
         summary_rows.append(f'<row r="{row_num}">{"".join(cells)}</row>')
     all_cells = [cell(f"A{all_summary_row}", "All Environments Total", style=total_style)]
     all_cells.append(cell(f"{column_name(total_col_start + 1)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 1)}{data_start}:{column_name(total_col_start + 1)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["monthly"])))
@@ -727,6 +750,11 @@ def build_wide_environment_sheet(
     offset += 1
     if include_discount:
         all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + offset)}{data_start}:{column_name(total_col_start + offset)}{data_end})", style=summary_currency_style, formula_value=cached_value(all_totals["one_disc"])))
+        offset += 1
+    all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 2)}{all_summary_row},{column_name(total_col_start + (5 if include_discount else 3))}{all_summary_row})", style=summary_currency_style, formula_value=cached_value(all_totals["annual_cost"])))
+    offset += 1
+    if include_discount:
+        all_cells.append(cell(f"{column_name(total_col_start + offset)}{all_summary_row}", formula=f"SUM({column_name(total_col_start + 4)}{all_summary_row},{column_name(total_col_start + 6)}{all_summary_row})", style=summary_currency_style, formula_value=cached_value(all_totals["annual_disc_cost"])))
     summary_rows.append(f'<row r="{all_summary_row}">{"".join(all_cells)}</row>')
 
     sheet_rows = [
@@ -738,7 +766,7 @@ def build_wide_environment_sheet(
         row_xml(note_row, ["Customer-facing view shows list prices only." if not include_discount else "Working view includes discount calculations."]),
         row_xml(disclaimer_row, ["Disclaimer: Pricing is an estimate based on Oracle Cost Estimator or user-provided list-price inputs. It is not a formal Oracle quote. Validate pricing, terms, discounts, and availability with Oracle before procurement."]),
     ]
-    widths = [16, 72, 18, 16] + (([12, 12, 18, 18, 18, 18, 18, 18] if include_discount else [12, 12, 18, 18, 18]) * len(environments)) + ([12, 20, 20, 20, 20, 20, 20] if include_discount else [12, 20, 20, 20])
+    widths = [16, 72, 18, 16] + (([12, 12, 18, 18, 18, 18, 18, 18, 20, 20] if include_discount else [12, 12, 18, 18, 18, 20]) * len(environments)) + ([12, 20, 20, 20, 20, 20, 20, 20, 20] if include_discount else [12, 20, 20, 20, 20])
     cols = "".join(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>' for idx, width in enumerate(widths, start=1))
     dimension = f"A1:{column_name(last_col)}{disclaimer_row}"
     sheet_data = "".join(sheet_rows)

@@ -149,7 +149,7 @@ When a BOM includes Exadata Cloud@Customer X11M:
 - If using datasheet usable-storage figures, note that they are based on high redundancy unless a Normal redundancy capacity has been supplied or calculated separately.
 - Ask whether local backups are required before using maximum database size values.
 - Ask for License Included or Bring Your Own License when software licensing is in scope.
-- Ask whether installation and activation should be included as a one-time annual-cost row. Current price-list handling for `B91390` treats it as an `Each` service, excluded from recurring monthly totals and included once in discounted annual cost when requested.
+- Ask whether installation and activation should be included as a one-time annual-cost row. Current price-list handling for `B91390` treats it as an `Each` service, excluded from recurring monthly totals and included once in total annual cost and discounted total annual cost when requested.
 - Treat datasheet capacities and performance metrics as technical sizing references, not list prices.
 - Use Oracle Cost Estimator rows or the current approved Oracle pricing source for SKU and price fields.
 

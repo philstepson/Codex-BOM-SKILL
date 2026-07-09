@@ -112,7 +112,7 @@ def main() -> None:
     for header in ["Monthly List", "Annual List", "Monthly Disc", "Annual Disc"]:
         if header not in paas_headers:
             fail(f"PAAS sheet missing {header} columns")
-    for header in ["Total Monthly List", "Total Annual List", "Total Monthly Disc", "Total Annual Disc"]:
+    for header in ["Total Monthly List", "Total Annual List", "Total Monthly Disc", "Total Annual Disc", "Total Annual Cost", "Total Annual Disc Cost"]:
         if header not in paas_headers:
             fail(f"PAAS sheet missing {header} column")
     has_priced_paas_rows = any(
@@ -158,6 +158,8 @@ def main() -> None:
         fail("Customer BOM missing final total annual list-price column")
     if "Total One-Time List" not in customer_headers:
         fail("Customer BOM missing final total one-time list-price column")
+    if "Total Annual Cost" not in customer_headers:
+        fail("Customer BOM missing final total annual cost column")
     if not any(re.fullmatch(r"=SUM\([A-Z]+\d+:[A-Z]+\d+\)", value) for value in customer_cells.values()):
         fail("Customer BOM missing environment summary formulas")
     if "All Environments" not in customer_cells.values():

@@ -43,7 +43,7 @@ Use `assets/oracle-cost-estimator-sample.xlsx` as a format reference when a user
 
 When the user asks for the preferred classic Excel BOM format, a customer proposal workbook, or a multi-environment BOM, read `references/classic-excel-bom-layout.md`. Treat the classic sample workbook as a tested layout reference only; do not use its embedded price lists as current pricing.
 
-For proposal-style workbooks, include a customer-facing BOM view that shows one row per unique SKU or priced line item, environment-specific column blocks for quantities/hours/list prices, summary rows under the SKU rows for each environment, and final all-environment totals. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic on the `PAAS` working sheet.
+For proposal-style workbooks, include a customer-facing BOM view that shows one row per unique SKU or priced line item, environment-specific column blocks for quantities/hours/list prices, summary rows under the SKU rows for each environment, and final all-environment totals. Include `Total Annual Cost` as annual recurring list cost plus one-time list cost. If the user asks for a customer version with list price only, omit discounted totals from that customer-facing view while retaining discount logic and `Total Annual Disc Cost` on the `PAAS` working sheet.
 
 For configured systems, generated workbooks include a `System Summary` sheet that describes requested and configured processor, memory, storage, and VM-cluster resources using the relevant datasheet reference plus BOM inputs. The summary uses vertical environment sections with `Description` and `Value` columns. A simple Draw.io-compatible block diagram may also be produced with `--diagram-output` when requested, but it is not required for normal BOM generation.
 
@@ -53,12 +53,12 @@ After generating a workbook with the script, run `scripts/validate_bom_workbook.
 
 The default workbook should include:
 
-- A primary `PAAS` sheet unless the user specifies another service type. For multi-environment BOMs, this should use the same wide environment-block layout as `Customer BOM` and add monthly, annual, and discounted price columns.
-- A visible `Customer BOM` sheet with list-price-only environment blocks that show monthly and annual totals.
+- A primary `PAAS` sheet unless the user specifies another service type. For multi-environment BOMs, this should use the same wide environment-block layout as `Customer BOM` and add monthly, annual, discounted price, and total annual cost columns.
+- A visible `Customer BOM` sheet with list-price-only environment blocks that show monthly recurring, annual recurring, one-time, and total annual cost columns.
 - A visible `System Summary` sheet with vertical environment sections for configured capacity.
 - A visible discount input near the top of the primary sheet or on an `Inputs`/`Summary` sheet.
 - Additional columns for discounted monthly and annual cost.
-- A monthly and annual total section showing list price, discount percentage, discounted monthly cost, and discounted annual cost.
+- A monthly and annual total section showing list price, one-time list price, discount percentage, discounted monthly cost, discounted annual cost, and combined annual cost.
 - Whole-dollar currency formatting with comma separators for monthly and annual amount columns. Preserve unit-rate precision in `Unit Price`.
 - Formula cells should include cached values for the generated discount and the workbook should force automatic recalculation on open, so viewers that do not immediately recalculate still show correct discounted totals.
 
@@ -110,7 +110,7 @@ Ask targeted questions only for services that are in scope. Do not run a full qu
 - Extract only the rows needed for the BOM from the authenticated PDF into a temporary runtime CSV, then pass that CSV to `scripts/build_bom_template.py` with `--supplemental-pricing-csv`.
 - Capture the document date from the PDF front page and pass it with `--supplemental-source-date`; when supplemental PDF pricing is used, add a footnote in `Custom Note` identifying Oracle eSource PDF pricing and that document date.
 - For one-time or non-metered service SKUs, ask for quantity if it is not obvious. Default to quantity `1` only when the user asks to add a single service and no other quantity context is present. Preserve the price-list billing basis in `Custom Note` so one-time service charges are not confused with hourly usage.
-- When the user wants a one-time SKU included in annual cost, leave the recurring `Monthly Cost` blank and calculate `Discounted Annual Cost` once from `Part Qty * Instance Qty * Unit Price * (1 - normalized Discount %)`.
+- When the user wants a one-time SKU included in annual cost, leave the recurring `Monthly Cost` blank, calculate one-time list cost once from `Part Qty * Instance Qty * Unit Price`, and include it in `Total Annual Cost`; include the discounted one-time value once in `Total Annual Disc Cost`.
 - Discount input should be a percentage. Accept either `15` or `0.15` as 15%.
 - Discounted monthly cost formula: `Monthly Cost * (1 - normalized Discount %)`, where values greater than `1` are divided by `100`.
 - Discounted annual cost formula: `Discounted Monthly Cost * 12`.
@@ -130,7 +130,7 @@ Before finalizing the workbook, confirm:
 - Discount percentage is editable and visibly labeled.
 - Discounted monthly and annual totals update from formulas.
 - Discounted totals include cached formula values and workbook calculation properties force automatic recalculation on open.
-- One-time service rows are excluded from recurring monthly cost and included once in discounted annual cost when requested.
+- One-time service rows are excluded from recurring monthly cost and included once in `Total Annual Cost`; the `PAAS` working sheet also includes them once in `Total Annual Disc Cost`.
 - Row total formulas use `SUM(...)` across environment columns and do not emit `#VALUE!` when an environment-specific recurring or one-time cell is blank.
 - Original list-price values remain visible.
 - Customer-facing proposal views show all SKUs, quantities, and list prices, and omit discounts when the user asks for list-price-only customer output.

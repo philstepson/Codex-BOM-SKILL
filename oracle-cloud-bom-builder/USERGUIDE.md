@@ -175,7 +175,7 @@ When you provide a SKU like this, the skill should:
 
 If the exact SKU cannot be found, the skill should not substitute a similarly named row without asking you to confirm the replacement.
 
-For one-time service SKUs such as `B91390`, leave recurring `Monthly Cost` blank when the charge should not recur monthly. Include the one-time charge once in `Discounted Annual Cost` using the same discount input as the recurring rows.
+For one-time service SKUs such as `B91390`, leave recurring `Monthly Cost` blank when the charge should not recur monthly. Include the one-time charge once in `Total Annual Cost` and once in `Total Annual Disc Cost` using the same discount input as the recurring rows.
 
 ## Supplemental Oracle eSource PDF Pricing
 
@@ -235,10 +235,10 @@ python3 scripts/build_bom_template.py \
 The generated workbook includes:
 
 - A primary `PAAS` worksheet by default, using the same wide environment-block layout as the customer view and adding discount columns.
-- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, monthly recurring list price, annual recurring list price, and one-time list-price blocks.
+- A visible `Customer BOM` worksheet that lists one row per unique SKU with environment-specific quantity, hours, monthly recurring list price, annual recurring list price, one-time list price, and total annual cost blocks.
 - A visible `System Summary` worksheet that groups configured-system capacity by environment in vertical `Description` / `Value` sections.
 - A single editable discount input in `K3`.
-- Discounted list-price columns on the `PAAS` working sheet.
+- Discounted list-price columns on the `PAAS` working sheet, including discounted total annual cost.
 - Environment summary rows below the SKU rows.
 - Cached formula values for discounted row totals and grand totals.
 - Workbook calculation settings that force automatic recalculation when the file opens.
@@ -248,13 +248,13 @@ When `--diagram-output` is supplied, the builder writes a Draw.io-compatible `.d
 
 The discount input accepts either whole-number percentages or decimal percentages. For example, `15` and `0.15` both calculate as a 15% discount.
 
-The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific monthly recurring, annual recurring, and one-time list-price summaries plus all-environment monthly and annual totals.
+The `Customer BOM` sheet intentionally omits discount columns. It is the list-price customer view and includes environment-specific monthly recurring, annual recurring, one-time list-price, and total annual cost summaries plus all-environment totals. `Total Annual Cost` is calculated as annual recurring list cost plus one-time list cost.
 
-The `PAAS` working sheet columns follow the same grouped environment pattern as the customer sheet, but include monthly and annual discounted price columns plus one-time discounted columns.
+The `PAAS` working sheet columns follow the same grouped environment pattern as the customer sheet, but include monthly and annual discounted price columns plus one-time discounted columns. `Total Annual Disc Cost` is calculated as discounted annual recurring cost plus discounted one-time cost.
 
 The customer-facing columns follow this pattern:
 
-`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `Monthly List`, `Annual List`, `One-Time List`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, and `Total One-Time List`. Environment names appear as grouped headers above each block.
+`Part`, `Description`, `Billing Basis`, `Unit List Price`, then one repeated block per environment: `Qty`, `Hrs`, `Monthly List`, `Annual List`, `One-Time List`, `Total Annual Cost`, followed by `Total Qty`, `Total Monthly List`, `Total Annual List`, `Total One-Time List`, and `Total Annual Cost`. Environment names appear as grouped headers above each block.
 
 `Monthly Cost`, `Discounted Monthly Cost`, and `Discounted Annual Cost` use whole-dollar currency formatting with comma separators. `Unit Price` remains unrounded so hourly rates such as `0.0807` stay visible.
 
@@ -264,10 +264,17 @@ If a row has quantity and unit price but no monthly cost, the workbook calculate
 Part Qty * Instance Qty * Usage Qty * Unit Price
 ```
 
-For one-time service rows, the workbook leaves monthly cost blank and calculates discounted annual cost as:
+For one-time service rows, the workbook leaves monthly cost blank and calculates discounted one-time cost as:
 
 ```text
 Part Qty * Instance Qty * Unit Price * (1 - normalized Discount %)
+```
+
+For environment summaries and all-environment totals, the workbook calculates combined annual totals as:
+
+```text
+Total Annual Cost = Annual List + One-Time List
+Total Annual Disc Cost = Annual Disc + One-Time Disc
 ```
 
 Multi-environment row totals use `SUM(...)` formulas across environment columns so blank recurring cells on one-time service rows calculate as zero instead of surfacing spreadsheet `#VALUE!` errors.
@@ -276,7 +283,7 @@ Multi-environment row totals use `SUM(...)` formulas across environment columns 
 
 The current repo output includes these generated BOMs:
 
-- `outputs/StandardC@C.xlsx`: Exadata Cloud@Customer X11M Base rack with 3 High Capacity storage servers, 64 BYOL ECPUs, and one-time `B91390` installation and activation included in discounted annual cost.
+- `outputs/StandardC@C.xlsx`: Exadata Cloud@Customer X11M Base rack with 3 High Capacity storage servers, 64 BYOL ECPUs, and one-time `B91390` installation and activation included in total annual cost and discounted total annual cost.
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M calculator-backed quarter-rack baseline with 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
 - `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx`: Multi-environment proposal workbook with Production, Disaster Recovery, and Non-Prod environments.
 - Optional Draw.io outputs can be generated with matching basenames and `.drawio` extensions.

@@ -52,7 +52,9 @@ Recommended behavior:
 - The discount input should accept both whole-number percentages and decimal percentages. Treat values greater than `1` as whole-number percentages, so `15` and `0.15` both mean 15%.
 - `Discounted Monthly Cost` should equal the row's list `Monthly Cost` multiplied by `1 - discount`.
 - `Discounted Annual Cost` should equal discounted monthly cost multiplied by `12`.
-- Total rows should sum list monthly cost, discounted monthly cost, and discounted annual cost.
+- `Total Annual Cost` should equal annual recurring list cost plus one-time list cost.
+- `Total Annual Disc Cost` should equal discounted annual recurring cost plus discounted one-time cost.
+- Total rows should sum list monthly cost, annual recurring cost, one-time cost, total annual cost, discounted monthly cost, discounted annual recurring cost, and total discounted annual cost.
 - Keep `Custom Note` as the rightmost table column so long source notes do not interrupt the numeric estimate columns.
 - Generated formula cells should include cached values for the default discount, and `xl/workbook.xml` should force automatic recalculation on open with `calcMode="auto"`, `fullCalcOnLoad="1"`, and `forceFullCalc="1"`.
 
@@ -66,7 +68,7 @@ When an estimator row lacks needed SKU or price data, especially for Exadata Clo
 
 When the user explicitly asks to add a SKU, treat that SKU as an intentional workbook row even if it is not a normal calculator-generated product row. Search the verified current eSource price-list PDF by exact SKU before attempting description matching. Use the exact price-list description and price fields for the row, and include the billing basis and document date in `Custom Note`. For example, `B91390` may be requested as `Gen 2 Exadata Cloud at Customer Installation and Activation Service`; if that SKU is not present in the calculator output, it should be resolved from the current or date-verified cached price-list PDF rather than inferred from the service description.
 
-For one-time or non-metered service SKUs, keep the billing basis visible in `Custom Note`. If the user wants the service included in the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank and calculate `Discounted Annual Cost` once from quantity and unit price. This is the current behavior for `B91390` in the Standard C@C output.
+For one-time or non-metered service SKUs, keep the billing basis visible in `Custom Note`. If the user wants the service included in the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank, calculate one-time list and discounted one-time values once from quantity and unit price, and include those values in `Total Annual Cost` and `Total Annual Disc Cost`. This is the current behavior for `B91390` in the Standard C@C output.
 
 Do not add persistent source-tracking columns for the supplemental PDF by default. Instead, keep the Oracle estimator columns unchanged and append a concise footnote to `Custom Note` for any row filled from the PDF. The note must identify Oracle eSource PDF pricing and include the document date from the PDF front page.
 
@@ -88,11 +90,11 @@ Leave SKU and price fields blank when current pricing has not been supplied or e
 
 The repo currently contains these generated BOM patterns:
 
-- `outputs/StandardC@C.xlsx`: Cloud@Customer X11M Base rack output generated from `tmp/StandardC@C-b91390.csv`. It includes `B110634` Base System Rack, `B110647` High Capacity storage servers, `B110663` BYOL ECPU runtime, and `B91390` one-time installation and activation. The installation row is excluded from recurring monthly totals and included once in discounted annual cost.
+- `outputs/StandardC@C.xlsx`: Cloud@Customer X11M Base rack output generated from `tmp/StandardC@C-b91390.csv`. It includes `B110634` Base System Rack, `B110647` High Capacity storage servers, `B110663` BYOL ECPU runtime, and `B91390` one-time installation and activation. The installation row is excluded from recurring monthly totals and included once in total annual cost and discounted total annual cost.
 - `outputs/oci-dedicated-exadata-x11m-64-byol-ecpus.xlsx`: OCI Dedicated Exadata X11M output generated from `inputs/oci-dedicated-exadata-x11m-64-byol-ecpus.csv`. It preserves calculator-backed rows for 2 database servers, 3 storage servers, and 64 BYOL ECPUs.
 - `outputs/multi-env-standard-cc-prod-dr-oci-nonprod.xlsx`: Multi-environment proposal workbook with Production and Disaster Recovery Exadata Cloud@Customer rows plus Non-Prod OCI Dedicated Exadata rows.
 
-Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use visually grouped environment-specific column blocks for quantity, hours, monthly recurring list price, annual recurring list price, and one-time list price; blank cells show when a SKU does not apply to an environment. It should also include environment summary rows below the SKU rows and final all-environment total columns for combined monthly and annual recurring cost, without verbose source-note columns. The `PAAS` working sheet should use the same environment-block layout and add monthly and annual discounted price columns.
+Generated workbooks should include a visible `Customer BOM` sheet with one row per unique SKU or priced line item. The customer sheet should use visually grouped environment-specific column blocks for quantity, hours, monthly recurring list price, annual recurring list price, one-time list price, and total annual cost; blank cells show when a SKU does not apply to an environment. It should also include environment summary rows below the SKU rows and final all-environment total columns for combined monthly recurring cost, annual recurring cost, one-time cost, and total annual cost, without verbose source-note columns. The `PAAS` working sheet should use the same environment-block layout and add monthly and annual discounted price columns plus discounted total annual cost.
 
 Generated workbooks should also include a visible `System Summary` sheet. It uses vertical environment sections with `Description` and `Value` columns to distinguish requested ECPUs, configured platform ECPU capacity, usable database cores, VM memory, storage capacity, XRMEM, flash cache, VM-cluster limits, redundancy, license model, and source assumptions.
 
@@ -134,15 +136,17 @@ If calculating list monthly cost from quantities:
 
 `=IF(OR(C7="",D7="",E7="",F7=""),"",C7*D7*E7*F7)`
 
-For one-time service SKUs that should be added to the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank and calculate `Discounted Annual Cost` once from quantity and unit price:
+For one-time service SKUs that should be added to the annual estimate but not recurring monthly cost, leave `Monthly Cost` blank and calculate discounted one-time cost once from quantity and unit price:
 
 `=IF(OR(C7="",D7="",F7=""),"",C7*D7*F7*(1-IF($K$3>1,$K$3/100,$K$3)))`
+
+Combined total annual cost should then add annual recurring cost plus one-time cost. Combined discounted total annual cost should add discounted annual recurring cost plus discounted one-time cost.
 
 For grouped environment layouts, calculate row totals with `SUM(...)` over the environment columns instead of direct addition. For example, use `=SUM(H10,N10,T10)` rather than `=H10+N10+T10` so one-time-only rows with blank recurring formulas do not recalculate to `#VALUE!`.
 
 ## Calculation Cache
 
-The workbook builder should write cached values into formula cells for row-level discounted monthly cost, row-level discounted annual cost, monthly total, discounted monthly total, and discounted annual total. These cached values are based on the initial discount supplied to the builder.
+The workbook builder should write cached values into formula cells for row-level discounted monthly cost, row-level discounted annual cost, one-time cost, total annual cost, monthly total, discounted monthly total, discounted annual total, and discounted total annual cost. These cached values are based on the initial discount supplied to the builder.
 
 The workbook should also force recalculation on open. In `xl/workbook.xml`, `calcPr` should be:
 
